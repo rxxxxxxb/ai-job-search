@@ -95,3 +95,35 @@ upskill/*.md
 
 # Brainstorm mockups (superpowers visual companion) - never ship
 .superpowers/
+
+# ---------------------------------------------------------------------------
+# FORK-LOCAL: candidate profile files (personal data — never commit)
+#
+# This fork is PUBLIC, and /setup writes real identity data into the files
+# below: name, address, phone, email, employment history, salary expectations,
+# behavioural assessment, and STAR examples naming real employers. Upstream
+# tracks them because upstream ships them as placeholder templates; here they
+# are untracked so personalization stays on this machine only.
+#
+# Trade-off: upstream methodology changes to these files no longer merge in.
+# Run `python3 tools/check_upstream_updates.py` to see which ones changed, then
+# port the methodology edits by hand around your own data.
+#
+# To restore upstream's placeholder copy of any of these:
+#   git checkout upstream/master -- <path>
+#
+# NOTE: cv/main_example.tex is deliberately NOT in this list. It stays tracked
+# as an untouched placeholder because CI's latex-smoke job compiles it on every
+# fork, and tools/security_guards.py requires the `!cv/main_example.tex` rule
+# above. The personalized base CV lives at cv/main_profile.tex instead, which
+# the `cv/main_*.*` rule already ignores.
+# ---------------------------------------------------------------------------
+CLAUDE.md
+.claude/skills/job-scraper/search-queries.md
+.claude/skills/job-application-assistant/01-candidate-profile.md
+.claude/skills/job-application-assistant/02-behavioral-profile.md
+.claude/skills/job-application-assistant/03-writing-style.md
+.claude/skills/job-application-assistant/04-job-evaluation.md
+.claude/skills/job-application-assistant/05-cv-templates.md
+.claude/skills/job-application-assistant/06-cover-letter-templates.md
+.claude/skills/job-application-assistant/07-interview-prep.md
