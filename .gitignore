@@ -127,3 +127,7 @@ CLAUDE.md
 .claude/skills/job-application-assistant/05-cv-templates.md
 .claude/skills/job-application-assistant/06-cover-letter-templates.md
 .claude/skills/job-application-assistant/07-interview-prep.md
+future plan.md
+# Reusable templates that carry real name and contact details
+cover_letters/old_cover.tex
+cv/old_resume.tex
