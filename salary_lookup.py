@@ -35,7 +35,7 @@ SPELLING_VARIANTS = {
 # Legal suffixes and noise to strip when matching company names
 STRIP_PATTERNS = [
     r"\ba/s\b", r"\baps\b", r"\bi/s\b", r"\bp/s\b", r"\bk/s\b",
-    r"\bivs\b", r"\bamba\b", r"\ba\.m\.b\.a\.\b",
+    r"\bivs\b", r"\bamba\b", r"\ba\.m\.b\.a\.?\b",
     r"\(vg\)", r"\(.*?\)",  # (VG) and other parentheticals
     r"\bdanmark\b", r"\bdenmark\b", r"\bscandinavia\b", r"\bnordic\b",
     r"\bgroup\b", r"\bholding\b",
@@ -291,6 +291,11 @@ def search_company(data, query, city=None):
 
 def format_entry(entry, metadata):
     """Format a single company entry for display."""
+    # `metadata` and `entry["categories"]` may be an explicit null: --validate
+    # treats a null the same as an omitted key ("...must be an object when
+    # provided"), but dict.get(key, default) only substitutes the default for an
+    # absent key, so a null reached `.get()`/`[]` here and crashed the lookup.
+    metadata = metadata or {}
     lines = []
     lines.append(f"\n{'='*60}")
     lines.append(f"  {entry['company']}")
@@ -298,8 +303,8 @@ def format_entry(entry, metadata):
         lines.append(f"  Location: {entry['city']}")
     lines.append(f"{'='*60}")
 
-    # Get category data (everything except company/city fields)
-    categories = entry.get("categories", {})
+    # Get category data (everything except company/city fields).
+    categories = entry.get("categories") or {}
     if not categories:
         # Fallback: treat any numeric fields as categories
         skip_keys = {"company", "city", "categories"}
@@ -314,6 +319,7 @@ def format_entry(entry, metadata):
         lines.append(f"  {'Category':<22} {'Count':>6} {index_label:>8}  {'vs Baseline':>10}")
         lines.append(f"  {'-'*50}")
 
+        suppressed = False  # did any row render its index as N/A*?
         for label, data in categories.items():
             display_label = label.replace("_", " ").title()
             count = data.get("count")
@@ -334,9 +340,14 @@ def format_entry(entry, metadata):
                 else:
                     index_str = "N/A*"
                     diff_str = ""
+                    suppressed = True
                 lines.append(f"  {display_label:<22} {count_str:>6} {index_str:>8}  {diff_str:>10}")
 
-        lines.append(f"\n  * N/A = Too few employees to publish (privacy)")
+        # The footnote explains the N/A* marker; printing it under a table with
+        # no such row asserts a privacy suppression that did not happen.
+        lines.append("")
+        if suppressed:
+            lines.append("  * N/A = Too few employees to publish (privacy)")
         if metadata.get("baseline_description"):
             lines.append(f"  {metadata['baseline_description']}")
         else:
@@ -374,7 +385,21 @@ def print_validation_report(errors, warnings):
     return 0
 
 
+def _force_utf8_output() -> None:
+    """Write UTF-8 whatever the host's default encoding is.
+
+    A piped stdout on Windows defaults to the ANSI code page (cp1252 on most
+    Western installs), so printing a company, title or file name outside it
+    raised UnicodeEncodeError before the workflow saw any output.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)  # absent on a StringIO under test
+        if reconfigure:
+            reconfigure(encoding="utf-8")
+
+
 def main():
+    _force_utf8_output()
     parser = argparse.ArgumentParser(description="Salary Benchmark Lookup")
     parser.add_argument("company", nargs="?", help="Company name to search for")
     parser.add_argument("--city", help="Filter by city name")

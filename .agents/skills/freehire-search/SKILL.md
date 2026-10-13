@@ -95,7 +95,10 @@ posting's complete text, so a search of 20 roles is 1 request rather than 1 + 20
 Do **not** loop `detail` over search hits to read their descriptions — reach for
 `detail` only to look one posting up by slug (e.g. from the tracker, or a posting
 already closed and therefore absent from search). Full descriptions are verbose:
-keep `--limit` modest, and pre-filter on title/company before reading bodies.
+keep `--limit` modest, and pre-filter on title/company before reading bodies -
+or pass `--no-description` for a cheap discovery pass that keeps every other
+field and drops the bodies entirely (fetch a shortlisted job's body with
+`detail`, or re-run the search without the flag).
 
 Facet filters (values come from freehire's controlled vocabularies; comma-separate for OR within a facet):
 - `--region <codes>` — macro-region, e.g. `global`, `eu`, `us`, `apac`, `latam`, `cis`. `--region eu,us`. Use `none` to match jobs whose region could **not** be resolved (see "Partial data" below).
@@ -123,7 +126,8 @@ bun run .agents/skills/freehire-search/cli/src/cli.ts detail <slug|url> [--forma
 `slug` is the `id` from a `search` result (e.g. `golang-zensar-2bxu6dxm`). You may
 also pass a full `https://freehire.me/jobs/<slug>` URL. Returns the full (HTML-stripped)
 description, skills, region/country, and — when the posting is enriched — seniority,
-category, employment type, and salary.
+category, employment type, and salary. `salary` keeps its period when freehire records
+one (`INR 300000–300000/year`, `INR 12000/month`); compare pay only in one period.
 
 Use it for a posting you already have a slug for — a tracked application, a shared
 link, or a closed posting search no longer lists. Re-fetching a hit that `search`

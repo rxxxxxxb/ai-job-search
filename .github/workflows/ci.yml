@@ -62,13 +62,19 @@ jobs:
       - run: python tools/security_guards.py
 
   python-tests:
-    name: Python tool tests
+    name: Python tool tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+      - name: Install Excel integration test dependency
+        run: python -m pip install openpyxl==3.1.5
       - run: python -m unittest discover -s tests -t . -v
 
   dependency-review:
@@ -103,11 +109,38 @@ jobs:
           fail-on-severity: high
 
   latex-smoke:
-    name: Compile example CV and cover letter
+    # Two legs. texlive/texlive:latest tracks current TeX Live (moderncv 2.5+);
+    # debian:bookworm compiles on apt-packaged TeX Live 2022 with moderncv
+    # 2.3.1 - the environment #242 hit and the one texlive:latest can never
+    # catch a regression in, because it never shipped the old class. The
+    # README's Linux setup path is apt, so both ends of the moderncv range
+    # users actually have stay compiled.
+    name: Compile example CV and cover letter (${{ matrix.leg.name }})
     runs-on: ubuntu-latest
-    container: texlive/texlive:latest
+    container: ${{ matrix.leg.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        leg:
+          - name: texlive-latest
+            container: texlive/texlive:latest
+          - name: debian-bookworm
+            container: debian:bookworm
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install apt-packaged TeX Live (bookworm leg)
+        if: matrix.leg.name == 'debian-bookworm'
+        # --no-install-recommends keeps the leg lean, so the two font packages
+        # must then be named explicitly: moderncv loads fontawesome5, which apt
+        # ships in texlive-fonts-extra (lualatex dies fatally without it), and
+        # hyperref's xetex driver probes the pzdr metrics from
+        # texlive-fonts-recommended (the cover letter fails without it).
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            texlive-luatex texlive-latex-extra texlive-xetex \
+            texlive-fonts-extra texlive-fonts-recommended \
+            poppler-utils python3
       - name: Install PDF inspection tools
         run: |
           if ! command -v pdfinfo >/dev/null || ! command -v pdftotext >/dev/null; then
@@ -143,26 +176,42 @@ jobs:
         run: |
           python3 tools/verify_pdf.py cv/main_example.pdf \
             --pages 2 \
+            --ascii-dates \
             --contains '[your.email@example.com]' \
-            --contains 'Professional Experience'
+            --contains 'Professional Experience' \
+            --contains 'Achievement'
           python3 tools/verify_pdf.py cover_letters/cover_example.pdf \
             --pages 1 \
             --contains 'your.email@example.com' \
             --contains 'Dear [Hiring Manager / Team]'
 
+  discover-clis:
+    # The matrix is discovered, not hardcoded, so a portal CLI added in a fork
+    # (the /add-portal path) gets typechecked and tested without the fork
+    # having to edit this workflow - the same reason security-guards globs
+    # .agents/**/package.json instead of naming the shipped portals.
+    name: Discover portal CLIs
+    runs-on: ubuntu-latest
+    outputs:
+      tools: ${{ steps.list.outputs.tools }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - id: list
+        run: |
+          tools=$(find .agents/skills -mindepth 3 -maxdepth 3 -path '*/cli/package.json' \
+            | cut -d/ -f3 | sort | jq -R . | jq -cs .)
+          echo "Discovered portal CLIs: $tools"
+          echo "tools=$tools" >> "$GITHUB_OUTPUT"
+
   cli-checks:
     name: CLI checks ${{ matrix.tool }}
+    needs: discover-clis
+    if: needs.discover-clis.outputs.tools != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        tool:
-          - freehire-search
-          - jobbank-search
-          - jobdanmark-search
-          - jobindex-search
-          - jobnet-search
-          - linkedin-search
+        tool: ${{ fromJSON(needs.discover-clis.outputs.tools) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -195,8 +244,9 @@ jobs:
             fi
           }
           check CLAUDE.md '\[YOUR_NAME\]'
-          check cv/main_example.tex '\[YOUR_NAME\]'
+          check cv/main_example.tex '\\name{\[First\]}{\[Last\]}'
+          check cv/main_example.tex '\\email{\[your\.email@example\.com\]}'
           check cover_letters/cover_example.tex '\[YOUR NAME\]'
-          check .claude/skills/job-application-assistant/01-candidate-profile.md '<!-- SETUP'
+          check .claude/skills/job-application-assistant/01-candidate-profile.md '\[YOUR_EMAIL\]'
           check .claude/skills/job-application-assistant/04-job-evaluation.md '\[YOUR_PRIMARY_SKILLS\]'
           exit $fail

@@ -18,7 +18,7 @@ description: >
   social worker job denmark, occupation search denmark, esco occupation, job deadline,
   ansøgningsfrist, søg efter job, full time job denmark, part time job denmark.
 context: fork
-enabled: false  # Danish portal - disabled on this fork (market: Germany). Kept installed as a reference implementation for /add-portal.
+enabled: false  # Danish demo portal - ships opt-in; /setup enables it when your market is Denmark, or set true here yourself
 allowed-tools: Bash(bun run .agents/skills/jobnet-search/cli/src/cli.ts *)
 ---
 
@@ -202,5 +202,5 @@ All errors are written to **stderr** as `{ "error": "...", "code": "..." }` and 
 - Pagination is 1-indexed (`--page 1` is the first page).
 - `search` results omit the HTML job description — use `detail` to get it.
 - `detail --format plain` strips HTML tags for readable text output.
-- Job ad detail pages on jobnet.dk: `https://jobnet.dk/job/{jobAdId}`
+- Job ad detail pages on jobnet.dk: `https://jobnet.dk/find-job/{jobAdId}`
 - `suggestions` is tuned for Danish job titles — English terms may return empty results.

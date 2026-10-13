@@ -1,10 +1,14 @@
+import io
 import unittest
+from contextlib import redirect_stderr
 from types import SimpleNamespace
 
+from salary_lookup import format_entry
 from tools.convert_salary_excel import (
     INDEX_PATTERNS,
     detect_column_type,
     header_matches,
+    parse_numeric_cell,
     parse_sheet,
 )
 
@@ -120,6 +124,39 @@ class DetectColumnTypeTests(unittest.TestCase):
                 self.assertEqual(len(companies), 1)
                 self.assertEqual(companies[0]["city"], "Aarhus")
 
+    def test_parse_sheet_handles_ragged_rows(self):
+        # openpyxl's read_only mode yields ragged tuples for dimension-less
+        # workbooks: a row can be shorter than the header. A company row that
+        # omits its city and category cells must parse without an IndexError,
+        # be retained, and get an empty city.
+        ws = FakeWorksheet([
+            ("Company", "City", "Engineering Count", "Engineering Index"),
+            ("Example Corp",),
+            ("Other Corp", "Aarhus", 12, 105.5),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(len(companies), 2)
+        self.assertEqual(companies[0]["company"], "Example Corp")
+        self.assertEqual(companies[0]["city"], "")
+        self.assertEqual(companies[0]["categories"], {})
+        self.assertEqual(companies[1]["categories"]["engineering"], {"count": 12, "index": 105.5})
+
+    def test_parse_sheet_skips_row_shorter_than_company_column(self):
+        # A ragged row that ends before the company column has no company cell
+        # at all; it must be skipped, not crash the parse.
+        ws = FakeWorksheet([
+            ("Notes", "Company", "Salary Index"),
+            ("stray",),
+            ("", "Example Corp", 105.5),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Example Corp")
+
     def test_skips_free_text_column(self):
         # A free-text "Notes" column must not become a bogus salary category.
         ws = FakeWorksheet([
@@ -156,6 +193,61 @@ class DetectColumnTypeTests(unittest.TestCase):
         self.assertIn("salary_index", companies[0]["categories"])
         self.assertEqual(companies[0]["categories"]["salary_index"], {"index": 105.5})
 
+    def test_parse_sheet_accepts_comma_decimal_string_values(self):
+        # Locale-formatted Excel exports can carry numeric cells as strings.
+        # Danish decimal commas must not be silently dropped by float().
+        ws = FakeWorksheet([
+            ("Company", "Engineering Count", "Engineering Index"),
+            ("Example Corp", "12,0", "108,5"),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"]["engineering"],
+            {"count": 12, "index": 108.5},
+        )
+
+    def test_parse_sheet_accepts_danish_thousands_and_decimal_string(self):
+        ws = FakeWorksheet([
+            ("Company", "Salary Index"),
+            ("Example Corp", "1.234,5"),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"]["salary_index"],
+            {"index": 1234.5},
+        )
+
+    def test_parse_sheet_skips_ambiguous_single_comma_thousands_string(self):
+        # In an English-locale export, "1,234" is probably 1234, but in a
+        # decimal-comma locale it could be 1.234. Preserve the old safe-skip
+        # behavior instead of guessing and writing a 1000x-wrong salary value.
+        ws = FakeWorksheet([
+            ("Company", "Salary Index"),
+            ("Example Corp", "1,234"),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(companies[0]["categories"], {})
+
+    def test_parse_sheet_skips_ambiguous_single_dot_thousands_string(self):
+        # "1.234" is the dot-side mirror of the comma guard above: in a
+        # decimal-dot locale it is 1.234, while a Danish export (whole
+        # thousands, no decimal comma, e.g. "60.000") means 1234/60000.
+        # float() used to write the 1000x-smaller value silently - the
+        # same never-guess policy must apply to both separators.
+        ws = FakeWorksheet([
+            ("Company", "Salary Index"),
+            ("Example Corp", "1.234"),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(companies[0]["categories"], {})
 
     def test_parse_sheet_pairs_interleaved_count_index_columns_by_name(self):
         ws = FakeWorksheet([
@@ -197,6 +289,214 @@ class DetectColumnTypeTests(unittest.TestCase):
         self.assertEqual(categories["a"], {"count": 10, "index": 100.0})
         self.assertEqual(categories["b"], {"count": 20, "index": 200.0})
 
+    def test_parse_sheet_ignores_citation_row_mentioning_company_pattern_word(self):
+        # A title/source-citation row above the real header - standard in
+        # real Danish union/statistics exports - can contain a stray
+        # company-pattern word ("arbejdsgiver" = employer) in running prose.
+        # It must not be mistaken for the header: that misreads the real
+        # header row as data (producing a bogus "Firma" company) and drops
+        # every real company's salary data (issue #414).
+        ws = FakeWorksheet([
+            ("Lønstatistik 2025",),
+            ("Kilde: Medlemsundersøgelse opdelt efter arbejdsgiver og branche",),
+            (),
+            ("Firma", "By", "Antal alle", "Lønindeks alle"),
+            ("Novo Nordisk A/S", "Bagsværd", 500, 108.5),
+            ("Ørsted A/S", "Fredericia", 200, 105.2),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(len(companies), 2)
+        self.assertEqual(companies[0]["company"], "Novo Nordisk A/S")
+        self.assertEqual(companies[0]["city"], "Bagsværd")
+        self.assertEqual(companies[0]["categories"]["alle"], {"count": 500, "index": 108.5})
+        self.assertEqual(companies[1]["company"], "Ørsted A/S")
+
+    def test_parse_sheet_rejects_citation_row_with_count_word_in_same_cell(self):
+        # Corroboration must come from a DIFFERENT cell than the company
+        # match. A single free-text sentence can pack both a company-pattern
+        # word and a count-pattern word together (e.g. "... opdelt efter
+        # arbejdsgiver, antal svar 1234") - same-cell corroboration must not
+        # be enough, or this citation row reintroduces the bogus-header bug.
+        ws = FakeWorksheet([
+            ("Lønstatistik 2025",),
+            ("Kilde: undersøgelse opdelt efter arbejdsgiver, antal svar 1234",),
+            (),
+            ("Firma", "By", "Antal alle", "Lønindeks alle"),
+            ("Novo Nordisk A/S", "Bagsværd", 500, 108.5),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Novo Nordisk A/S")
+        self.assertEqual(companies[0]["categories"]["alle"], {"count": 500, "index": 108.5})
+
+    def test_parse_sheet_falls_back_when_no_row_has_cross_cell_corroboration(self):
+        # A header with only untyped salary columns (no header matches a
+        # known city/count/index pattern - "Base pay"/"Bonus" don't) has
+        # nothing to corroborate against in any row. The strict cross-cell
+        # check must fall back to the original any-cell-mentions-company
+        # rule rather than failing to find a header at all.
+        ws = FakeWorksheet([
+            ("Company", "Base pay 2025", "Bonus 2025"),
+            ("Example Corp", 55000, 5000),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Example Corp")
+        self.assertEqual(companies[0]["categories"]["base_pay_2025"], {"index": 55000.0})
+        self.assertEqual(companies[0]["categories"]["bonus_2025"], {"index": 5000.0})
+
+    def test_parse_sheet_warns_when_no_salary_columns_detected(self):
+        # A header row with only company/city columns and no salary data
+        # is a strong signal something is wrong (a misdetected header row,
+        # or a sheet with no salary data at all) - it should be flagged,
+        # not silently reported as a successful conversion.
+        ws = FakeWorksheet([
+            ("Company", "City"),
+            ("Example Corp", "Aarhus"),
+        ])
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            companies = parse_sheet(ws)
+
+        self.assertEqual(companies[0]["categories"], {})
+        self.assertIn("No salary data columns detected", stderr.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ParseNumericCellLocaleTests(unittest.TestCase):
+    # The separator that appears LAST is the decimal separator. Assuming
+    # European ("." thousands, "," decimal) for every both-separator string
+    # turned a US "1,234.56" into 1.23456 - a silent 1000x corruption that
+    # flowed into salary_data.json and negotiation advice.
+
+    def test_us_thousands_and_decimal_string(self):
+        self.assertEqual(parse_numeric_cell("1,234.56"), 1234.56)
+
+    def test_us_multiple_thousands_groups(self):
+        self.assertEqual(parse_numeric_cell("1,234,567.89"), 1234567.89)
+
+    def test_european_thousands_and_decimal_string(self):
+        self.assertEqual(parse_numeric_cell("1.234,56"), 1234.56)
+
+    def test_european_multiple_thousands_groups(self):
+        self.assertEqual(parse_numeric_cell("1.234.567,89"), 1234567.89)
+
+
+class BareCountIndexPairingTests(unittest.TestCase):
+    """A count/index pair whose headers carry no category word is still a pair.
+
+    "Count" + "Index" (Danish "Antal" + "Lønindeks") both strip to an empty
+    category name, and the pairing loop used to require a non-empty name on
+    both sides, so the single-category layout the README describes as
+    "auto-pairs count/index columns" came out as two unrelated standalone
+    columns. salary_lookup then rendered the count row with "N/A*" for the
+    index - "too few employees to publish (privacy)" - about a company whose
+    headcount was right there in the file. The literal name is asserted (not
+    the module constant) so the cases run, and fail, against the old converter.
+    """
+
+    DEFAULT_CATEGORY = "all_employees"
+
+    def test_bare_english_pair_is_paired_under_the_default_category(self):
+        ws = FakeWorksheet([
+            ("Company", "City", "Count", "Index"),
+            ("Acme Corp", "Copenhagen", 500, 108.5),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"],
+            {self.DEFAULT_CATEGORY: {"count": 500, "index": 108.5}},
+        )
+
+    def test_bare_danish_pair_is_paired_under_the_default_category(self):
+        ws = FakeWorksheet([
+            ("Firma", "By", "Antal", "Lønindeks"),
+            ("Acme Corp", "Aarhus", 500, 108.5),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"],
+            {self.DEFAULT_CATEGORY: {"count": 500, "index": 108.5}},
+        )
+
+    def test_bare_pair_does_not_cross_pair_with_a_named_category(self):
+        # The bare pair and the named pair coexist; neither steals the other's
+        # column, and a lone "Antal" with no bare index column stays standalone
+        # (pinned separately by test_standalone_count_column_is_stored_as_count_not_index).
+        ws = FakeWorksheet([
+            ("Company", "Antal", "IT Count", "IT Index", "Lønindeks"),
+            ("Acme Corp", 500, 30, 112.0, 108.5),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"],
+            {
+                self.DEFAULT_CATEGORY: {"count": 500, "index": 108.5},
+                "it": {"count": 30, "index": 112.0},
+            },
+        )
+
+    def test_lookup_renders_the_bare_pair_as_one_row_without_the_privacy_footnote_firing(self):
+        # End to end through the documented path: converter output is what
+        # salary_lookup.format_entry displays during /apply. Before the fix the
+        # same sheet produced a "Count  500  N/A*" row plus an "Index  -  108.5"
+        # row - the N/A* asserting a privacy suppression that never happened.
+        ws = FakeWorksheet([
+            ("Company", "City", "Count", "Index"),
+            ("Acme Corp", "Copenhagen", 500, 108.5),
+        ])
+        entry = parse_sheet(ws)[0]
+
+        rendered = format_entry(entry, {"index_baseline": 100, "index_label": "Index"})
+
+        self.assertNotIn("N/A*", rendered.split("* N/A =")[0])
+        self.assertRegex(rendered, r"All Employees\s+500\s+108\.5\s+\+8\.5%")
+        self.assertNotRegex(rendered, r"^\s*Count\s+500", )
+
+
+class CompoundCategoryPairingTests(unittest.TestCase):
+    def test_parse_sheet_pairs_danish_compound_index_with_count(self):
+        # "Lønindeks alle" is *detected* as an index column via
+        # COMPOUND_PATTERNS, but the derived category name must also lose the
+        # compound word or it can never pair with "Antal alle" ("alle" vs
+        # "lønindeks alle") - exactly the locale the compound support exists for.
+        ws = FakeWorksheet([
+            ("Firma", "Antal alle", "Lønindeks alle"),
+            ("Example Corp", 12, 118.0),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"]["alle"],
+            {"count": 12, "index": 118.0},
+        )
+
+    def test_parse_sheet_sheet_level_us_locale_value(self):
+        ws = FakeWorksheet([
+            ("Company", "Salary Index"),
+            ("Example Corp", "1,234.56"),
+        ])
+
+        companies = parse_sheet(ws)
+
+        self.assertEqual(
+            companies[0]["categories"]["salary_index"],
+            {"index": 1234.56},
+        )

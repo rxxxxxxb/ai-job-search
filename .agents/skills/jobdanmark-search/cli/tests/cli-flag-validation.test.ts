@@ -4,7 +4,9 @@ import { runCLI } from "./helpers";
 // All cases fail schema validation (or the required-flag guard) before any
 // network request, so the suite is network-free. Regression context: a bare
 // z.coerce.number() accepted --limit=-1, and slice(0, -1) then silently
-// dropped the last result instead of erroring.
+// dropped the last result instead of erroring. Filter flags (--category,
+// --jobtitle-id) also accepted negative and fractional values that were
+// sent raw to the portal.
 
 function expectValidationError(result: { exitCode: number; stdout: string; stderr: string }, option: string) {
   expect(result.exitCode).toBe(1);
@@ -25,6 +27,18 @@ describe("Jobdanmark CLI flag validation", () => {
   test("search --page=0 is rejected on the 1-indexed portal", async () => {
     const result = await runCLI(["search", "--page=0"]);
     expectValidationError(result, "page");
+  });
+
+  test("search --category=-1 is rejected", async () => {
+    const result = await runCLI(["search", "--category=-1"]);
+    expectValidationError(result, "category");
+    expect(JSON.parse(result.stderr).error.message).toContain("greater than or equal to 1");
+  });
+
+  test("search --jobtitle-id=1.5 is rejected as non-integer", async () => {
+    const result = await runCLI(["search", "--jobtitle-id=1.5"]);
+    expectValidationError(result, "jobtitle-id");
+    expect(JSON.parse(result.stderr).error.message).toContain("Expected integer");
   });
 
   test("search --limit=1.5 is rejected as non-integer", async () => {
@@ -56,5 +70,57 @@ describe("Jobdanmark CLI flag validation", () => {
       error: "--query is required",
       code: "MISSING_REQUIRED",
     });
+  });
+});
+
+
+describe("unknown flag rejection", () => {
+  // add-portal.md's contract: "a bogus flag or missing required arg exits 1
+  // with a JSON error on stderr". A silently discarded flag is worse than an
+  // error: on jobdanmark a wrong flag name returned the entire database
+  // (13,862 results) as if it matched the query (review finding F13,
+  // 2026-08-19). Rejection happens before dispatch, so these are network-free.
+  test("a bogus --flag exits 1 with a JSON error instead of being silently discarded", async () => {
+    const result = await runCLI(["search", "--text", "test", "--bogus-flag", "xyz"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    const error = JSON.parse(result.stderr);
+    expect(error.code).toBe("UNKNOWN_FLAG");
+    expect(error.error).toContain("--bogus-flag");
+  });
+
+  test("--query (another portal's free-text flag) is rejected, not treated as no filter", async () => {
+    const result = await runCLI(["search", "--query", "test"]);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stderr).code).toBe("UNKNOWN_FLAG");
+  });
+  // #426: the guard inspected only `--long` tokens, so a single-dash flag was
+  // discarded in silence - the same failure the long-form tests above pin,
+  // reached by the likelier route. `-q` is the documented short for the
+  // keyword search in linkedin-search, freehire-search and jobindex-search,
+  // so it is what a cross-portal habit produces here; live, it returned the
+  // portal's entire database as a successful, unfiltered search.
+  test("-q (another portal's short flag) is rejected, not treated as no filter", async () => {
+    const result = await runCLI(["search", "-q", "test"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    const error = JSON.parse(result.stderr);
+    expect(error.code).toBe("UNKNOWN_FLAG");
+    expect(error.error).toContain("-q");
+  });
+
+  // bunli discards a `-`-prefixed token instead of consuming it as the
+  // previous flag's value, so a negative number never reached the option's
+  // own schema - it silently fell back to the default. Loud beats silent.
+  test("a negative number is rejected instead of silently falling back to the default", async () => {
+    const result = await runCLI(["search", "--text", "test", "--limit", "-5"]);
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(result.stderr).code).toBe("UNKNOWN_FLAG");
+  });
+
+  test("-h still prints help rather than being rejected as unknown", async () => {
+    const result = await runCLI(["search", "-h"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
   });
 });

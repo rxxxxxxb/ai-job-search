@@ -18,7 +18,11 @@ export interface JobAdRaw {
   postalCode: number | null
   postalDistrictName: string | null
   country: string
-  publicationDate: string
+  // A TypeScript claim is not runtime validation: apiFetch casts the JSON
+  // body, so a null here arrives typed as string and .slice() throws,
+  // killing the whole search as API_ERROR (#418). Typed nullable so the
+  // compiler enforces the guard below.
+  publicationDate: string | null
   applicationDeadline: string | null
   applicationDeadlineStatus: string | null
   workHourPartTime: boolean
@@ -100,6 +104,13 @@ export function createSearchOutput(data: SearchApiResponse, flags: SearchFlags) 
     workPlaceAddress: job.workPlaceAddress ?? "",
     isSeen: job.isSeen,
     isFavorite: job.isFavorite,
+    company: job.hiringOrgName,
+    location: job.postalDistrictName ?? job.municipality ?? null,
+    date: job.publicationDate ? job.publicationDate.slice(0, 10) : null,
+    deadline: job.applicationDeadline && !job.applicationDeadline.startsWith("1900-01-01")
+      ? job.applicationDeadline.slice(0, 10)
+      : null,
+    url: `https://jobnet.dk/find-job/${job.jobAdId}`,
   }))
 
   if (flags.limit !== undefined) {
@@ -155,7 +166,7 @@ export const search = defineCommand({
     "postal-code": option(z.string().optional(), {
       description: "Postal code for radius search",
     }),
-    radius: option(z.coerce.number().default(50), {
+    radius: option(z.coerce.number().int().min(1).default(50), {
       description: "Radius in km from postal code",
     }),
     "occupation-area": option(z.string().optional(), {
@@ -204,7 +215,7 @@ type JobAdResult = {
   occupation: string | null
   municipality: string | null
   postalCode: number | null
-  publicationDate: string
+  publicationDate: string | null
   applicationDeadline: string | null
 }
 
