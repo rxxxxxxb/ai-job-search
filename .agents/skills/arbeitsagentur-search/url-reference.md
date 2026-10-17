@@ -28,6 +28,9 @@ exponentially on `429`/`5xx` as a matter of hygiene.
 - `https://www.arbeitsagentur.de/robots.txt` → `User-agent: *` / `Disallow:` / `Allow: /`
   — nothing is disallowed.
 - `https://rest.arbeitsagentur.de/robots.txt` → `403` (the API host serves no robots.txt).
+- The CLI identifies itself as `Mozilla/5.0 (compatible; arbeitsagentur-cli/1.0)`, per the
+  portal-skill contract. The API serves it the same data as a browser User-Agent: identical
+  totals, postings and fields on search, identical detail responses (checked 2026-10-17).
 - This is a public API of a German federal agency serving public job listings. **No
   personal-use-only restriction applies**, in contrast to `linkedin-search`.
 

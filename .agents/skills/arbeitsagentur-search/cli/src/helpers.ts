@@ -17,9 +17,9 @@ export const PUBLIC_JOB_URL = "https://www.arbeitsagentur.de/jobsuche/jobdetail"
 // secret and not tied to a user account - the API rejects requests without it.
 export const API_KEY = "jobboerse-jobsuche"
 
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+// Says who is asking, as the other portal CLIs do. The API serves this the same
+// data as a browser User-Agent (identical results and fields, checked 2026-10-17).
+export const USER_AGENT = "Mozilla/5.0 (compatible; arbeitsagentur-cli/1.0)"
 
 export function writeError(error: string, code: string): void {
   process.stderr.write(JSON.stringify({ error, code }) + "\n")
@@ -39,7 +39,7 @@ export async function jsonFetch<T>(url: string): Promise<T | null> {
     const response = await fetch(url, {
       headers: {
         "X-API-Key": API_KEY,
-        "User-Agent": UA,
+        "User-Agent": USER_AGENT,
         Accept: "application/json",
         "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
       },
