@@ -3,7 +3,7 @@ import {
   jsonFetch,
   toJobCard,
   offerTypeCode,
-  workTimeCode,
+  workTimeFilter,
   writeError,
   type JobCard,
 } from "../helpers.js"
@@ -22,7 +22,7 @@ export interface SearchOpts {
 }
 
 interface SearchResponse {
-  stellenangebote?: Record<string, unknown>[]
+  ergebnisliste?: Record<string, unknown>[]
   maxErgebnisse?: number
   page?: number
   size?: number
@@ -38,8 +38,8 @@ export function buildUrl(opts: SearchOpts): string {
   if (opts.jobage > 0 && opts.jobage < 9999) {
     params.set("veroeffentlichtseit", String(opts.jobage))
   }
-  const wt = workTimeCode(opts.worktime)
-  if (wt) params.set("arbeitszeit", wt)
+  const wt = workTimeFilter(opts.worktime)
+  if (wt) params.set(wt[0], wt[1])
   params.set("angebotsart", offerTypeCode(opts.offerType))
   params.set("page", String(opts.page))
   params.set("size", String(opts.size))
@@ -70,7 +70,7 @@ function renderTable(cards: JobCard[]): string {
 export async function runSearch(opts: SearchOpts): Promise<number> {
   try {
     const data = await jsonFetch<SearchResponse>(buildUrl(opts))
-    const raw = data?.stellenangebote ?? []
+    const raw = data?.ergebnisliste ?? []
 
     let cards = raw
       .map((r) => toJobCard(r))

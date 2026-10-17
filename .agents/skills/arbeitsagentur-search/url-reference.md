@@ -1,6 +1,8 @@
 # Arbeitsagentur Jobbörse API — endpoint reference
 
-Investigated 2026-07-30. This is the file to update if the API changes.
+Investigated 2026-07-30. Search moved from v4 to v6 and was re-verified 2026-10-17 against the
+live API and the arbeitsagentur.de frontend's own code. This is the file to update if the API
+changes again.
 
 ## Base
 
@@ -32,17 +34,22 @@ exponentially on `429`/`5xx` as a matter of hygiene.
 ## Search
 
 ```
-GET /pc/v4/jobs
+GET /pc/v6/jobs
 ```
+
+`/pc/v4/jobs` (used until 2026) now answers `403 No match found for request` - the API
+gateway's reply for a path it no longer routes, with or without the key. The v6 result
+list and its field names differ from v4; see below.
 
 | Parameter | Meaning | Notes |
 |-----------|---------|-------|
 | `was` | Keywords (what) | Job title, skill, employer |
 | `wo` | Location (where) | City, postcode, region, or `Deutschland` |
 | `umkreis` | Radius in km | Applies around `wo` |
-| `veroeffentlichtseit` | Published within N **days** | Omit for any age |
+| `veroeffentlichtseit` | Published within N **days** | Omit for any age. Approximate: it narrows the set, but does not match any date the API returns exactly (a 30-day search still returns some postings whose every date is older) |
 | `angebotsart` | Offer type | `1` employment, `2` self-employed, `4` Ausbildung, `34` Praktikum |
-| `arbeitszeit` | Working time | `vz` Vollzeit, `tz` Teilzeit, `ho` Homeoffice, `mj` Minijob, `snw` Schicht. Comma-separated |
+| `arbeitszeit` | Working time | `vz` Vollzeit, `tz` Teilzeit, `mj` Minijob, `snw` Schicht. Several values are semicolon-separated. `ho` is still in the community spec but matches nothing on v6 |
+| `homeoffice` | Home office | `prozentual_0;nv_true` = any stated home-office share plus home office by arrangement, as the arbeitsagentur.de frontend sends it. `--worktime remote` maps here. A bare `nv_true` is rejected with `400` |
 | `page` | Page number | **1-indexed** |
 | `size` | Results per page | Max 100 |
 
@@ -50,7 +57,7 @@ GET /pc/v4/jobs
 
 ```json
 {
-  "stellenangebote": [ ... ],
+  "ergebnisliste": [ ... ],
   "maxErgebnisse": 487,
   "page": 1,
   "size": 25,
@@ -61,21 +68,37 @@ GET /pc/v4/jobs
 
 `maxErgebnisse` is the total server-side match count, surfaced as `meta.total`.
 
-### Per-result fields (`stellenangebote[]`)
+### Per-result fields (`ergebnisliste[]`)
+
+Since v6, search uses the same field vocabulary as the detail endpoint.
 
 | API field | Mapped to | Notes |
 |-----------|-----------|-------|
-| `refnr` | `id` | Reference number, e.g. `10001-1003435354-S` |
-| `titel` | `title` | Falls back to `beruf` when absent |
-| `beruf` | `profession` | Normalised occupation label |
-| `arbeitgeber` | `company` | |
-| `arbeitsort` | `location` | Object: `{plz, ort, strasse, region, land, koordinaten}` |
-| `aktuelleVeroeffentlichungsdatum` | `date` | `YYYY-MM-DD` |
-| `eintrittsdatum` | `startDate` | |
-| `externeUrl` | `externalUrl` | Present only when the employer posts via a partner site |
+| `referenznummer` | `id` | Reference number, e.g. `10001-1003435354-S` (v4: `refnr`) |
+| `stellenangebotsTitel` | `title` | Falls back to `hauptberuf` when absent (v4: `titel`) |
+| `hauptberuf` | `profession` | Normalised occupation label (v4: `beruf`) |
+| `firma` | `company` | (v4: `arbeitgeber`) |
+| `stellenlokationen[0].adresse` | `location` | List of `{adresse: {plz, ort, region, land, ...}, breite, laenge}`; most postings have one, some up to 8. The CLI uses the first (v4: `arbeitsort`) |
+| `veroeffentlichungszeitraum.von` | `date` | `YYYY-MM-DD`, start of the current publication period. Falls back to `datumErsteVeroeffentlichung`, which can be months older for re-published ads (v4: `aktuelleVeroeffentlichungsdatum`) |
+| `eintrittszeitraum.von` | `startDate` | (v4: `eintrittsdatum`) |
+| `externeURL` | `externalUrl` | Present only when the employer posts via a partner site. Capital `URL` (v4: `externeUrl`) |
 
-**Quirk:** `arbeitsort.strasse` is sometimes the literal **string** `"null"`, not JSON
-`null`. `nullish()` in `helpers.ts` normalises this.
+Other fields seen on v6 hits: `stellenangebotsart`, `vertragsdauer` (`UNBEFRISTET` /
+`BEFRISTET` / `KEINE_ANGABE`), `verguetungsangabe`, `gehaltsspanneVon`/`gehaltsspanneBis`,
+`arbeitszeitVollzeit` and the other `arbeitszeit*` booleans, `homeofficemoeglich`,
+`homeofficetyp`, `homeofficeprozent`, `datumErsteVeroeffentlichung`, `aenderungsdatum`,
+`alleBerufe`, `arbeitgeberKundennummerHash`, `chiffrenummer`, `entfernung`.
+
+**Quirk:** `region` is SCREAMING_SNAKE (`NORDRHEIN_WESTFALEN`). The CLI writes the 16
+federal states by name (`Nordrhein-Westfalen`) and only drops the underscores from anything
+else.
+
+**Quirk:** address parts have been sent as the literal **string** `"null"`, not JSON `null`.
+`nullish()` in `helpers.ts` normalises this.
+
+**Quirk:** results of equal rank come back in a different order on every request, even with
+identical parameters. Fetching page 2 separately can therefore repeat or skip a few
+postings at the page boundary; `/scrape` deduplicates by `id`.
 
 ## Detail
 
@@ -99,32 +122,32 @@ Verified endpoint behaviour:
 **`403` means "not found"** on this endpoint (unknown or expired reference number), not an
 auth failure — the key is always sent. The CLI maps `403`/`404` to `null` → `NOT_FOUND`.
 
-### Detail fields — a different vocabulary from search
+### Detail fields
 
-This is the biggest gotcha: the detail endpoint shares almost no field names with search.
+Until v4 this endpoint shared almost no field names with search; since v6, search uses the
+same vocabulary. Detail-specific mappings:
 
-| Detail field | Search equivalent | Mapped to |
-|--------------|-------------------|-----------|
-| `stellenangebotsTitel` | `titel` | `title` |
-| `stellenangebotsBeschreibung` | — | `description` |
-| `firma` | `arbeitgeber` | `company` |
-| `hauptberuf` | `beruf` | `profession` |
-| `stellenlokationen[].adresse` | `arbeitsort` | `location` |
-| `datumErsteVeroeffentlichung` | `aktuelleVeroeffentlichungsdatum` | `date` |
-| `eintrittszeitraum.von` | `eintrittsdatum` | `startDate` |
-| `referenznummer` | `refnr` | `id` |
-| `vertragsdauer` | — | `contractDuration` (`UNBEFRISTET` / `BEFRISTET`) |
-| `arbeitszeitVollzeit` | — | `fullTime` (boolean) |
-| `verguetungsangabe` | — | `salary` |
-| `istPrivateArbeitsvermittlung` | — | `isPrivateAgency` (boolean) |
-| `stellenangebotsart` | — | `employmentType` (`ARBEIT`, ...) |
-| `allianzpartnerUrl` | `externeUrl` | `externalUrl` |
+| Detail field | Mapped to |
+|--------------|-----------|
+| `stellenangebotsTitel` | `title` |
+| `stellenangebotsBeschreibung` | `description` |
+| `firma` | `company` |
+| `hauptberuf` | `profession` |
+| `stellenlokationen[0].adresse` | `location` |
+| `datumErsteVeroeffentlichung` | `date` (first publication; search uses the current publication period) |
+| `eintrittszeitraum.von` | `startDate` |
+| `vertragsdauer` | `contractDuration` (`UNBEFRISTET` / `BEFRISTET`) |
+| `arbeitszeitVollzeit` | `fullTime` (boolean) |
+| `verguetungsangabe` | `salary` |
+| `istPrivateArbeitsvermittlung` | `isPrivateAgency` (boolean) |
+| `stellenangebotsart` | `employmentType` (`ARBEIT`, ...) |
+| `allianzpartnerUrl` | `externalUrl` (search: `externeURL`) |
 
 **Quirk:** `verguetungsangabe` is `"KEINE_ANGABEN"` when no salary is stated. Mapped to
 `null` so the sentinel never surfaces as a salary.
 
-**Quirk:** `stellenlokationen[].adresse.region` is SCREAMING_SNAKE
-(`BADEN_WUERTTEMBERG`), whereas search returns it title-cased (`Baden-Württemberg`).
+**Quirk:** `stellenlokationen[].adresse.region` is SCREAMING_SNAKE (`BADEN_WUERTTEMBERG`),
+as in search; the CLI maps it the same way (`Baden-Württemberg`).
 
 ## Public job URL
 

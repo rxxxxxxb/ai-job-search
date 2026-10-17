@@ -54,7 +54,7 @@ bun run .agents/skills/arbeitsagentur-search/cli/src/cli.ts search [flags]
 | `--query`, `-q` | Keywords: job title, skill, or role. e.g. `"Machine Learning Engineer"` |
 | `--location`, `-l` | City, postcode, region, or `Deutschland` for nationwide |
 | `--radius`, `-r` | Radius around `--location` in km. e.g. `50` |
-| `--jobage` | Posted within N days. Default: all ages |
+| `--jobage` | Posted within N days (the API applies this approximately). Default: all ages |
 | `--worktime` | `remote` \| `vollzeit` \| `teilzeit` \| `minijob` \| `schicht` |
 | `--offer-type` | `employment` (default) \| `ausbildung` \| `praktikum` \| `selbstaendig` |
 | `--page` | 1-indexed page. Default `1` |
@@ -138,9 +138,9 @@ Errors go to **stderr** as `{"error": "...", "code": "..."}` with exit code `1`.
 - **`ANÜ` in a title means `Arbeitnehmerüberlassung`** — temporary staffing / labour
   leasing, not a direct hire. The `isPrivateAgency` field on `detail` (`true`) flags
   postings listed via a private recruitment agency rather than the employer.
-- **Two different field vocabularies.** The search and detail endpoints do not share
-  field names (`titel` vs `stellenangebotsTitel`, `arbeitgeber` vs `firma`). The mapping
-  is documented in `url-reference.md`.
+- **Search runs on the API's v6 endpoint, detail on v4.** Since v6, search uses the same
+  field names as detail (`stellenangebotsTitel`, `firma`, `stellenlokationen`); v4 search
+  is switched off. The mapping is documented in `url-reference.md`.
 - **Detail is keyed by base64 of the reference number.** The raw refnr returns 403 on the
   detail endpoint; the CLI handles the encoding.
 - **403 means "not found" here**, not "forbidden" — the API returns it for unknown or

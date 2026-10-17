@@ -5,28 +5,32 @@ import {
   encodeRefnr,
   publicUrl,
   workTimeCode,
+  workTimeFilter,
   offerTypeCode,
 } from "../src/helpers.js"
 import { buildUrl } from "../src/commands/search.js"
 import { extractRefnr } from "../src/commands/detail.js"
 
-// A real search hit, trimmed. Note `strasse: "null"` — the API emits the literal
-// string "null" for a missing street, which must not leak into output.
+// A search hit in the v6 shape (`ergebnisliste[]`), trimmed. `strasse: "null"`
+// stays in on purpose: the API has emitted the literal string "null" for a
+// missing street, which must not leak into output.
 const SEARCH_HIT = {
-  beruf: "Machine Learning Engineer",
-  titel: "Software-Entwickler Machine Learning (m/w/d)",
-  refnr: "12117-YF-44420-YF-S",
-  arbeitsort: {
-    plz: "87600",
-    ort: "Kaufbeuren",
-    strasse: "null",
-    region: "Bayern",
-    land: "Deutschland",
-  },
-  arbeitgeber: "ATCSIM GmbH",
-  aktuelleVeroeffentlichungsdatum: "2026-07-20",
-  eintrittsdatum: "2026-07-20",
-  externeUrl: "https://www.yourfirm.de/job/detail/YF-44420/",
+  stellenangebotsart: "ARBEIT",
+  stellenangebotsTitel: "Software-Entwickler Machine Learning (m/w/d)",
+  hauptberuf: "Machine Learning Engineer",
+  firma: "ATCSIM GmbH",
+  referenznummer: "12117-YF-44420-YF-S",
+  stellenlokationen: [
+    {
+      adresse: { plz: "87600", ort: "Kaufbeuren", strasse: "null", region: "BAYERN", land: "DEUTSCHLAND" },
+      breite: 47.88,
+      laenge: 10.62,
+    },
+  ],
+  veroeffentlichungszeitraum: { von: "2026-07-20" },
+  datumErsteVeroeffentlichung: "2026-03-02",
+  eintrittszeitraum: { von: "2026-08-01" },
+  externeURL: "https://www.yourfirm.de/job/detail/YF-44420/",
 }
 
 describe("toJobCard", () => {
@@ -38,30 +42,39 @@ describe("toJobCard", () => {
     expect(c.location).toBe("87600 Kaufbeuren, Bayern")
     expect(c.date).toBe("2026-07-20")
     expect(c.url).toContain("arbeitsagentur.de/jobsuche/jobdetail/")
+    expect(c.profession).toBe("Machine Learning Engineer")
+    expect(c.externalUrl).toBe("https://www.yourfirm.de/job/detail/YF-44420/")
+    expect(c.startDate).toBe("2026-08-01")
+  })
+
+  test("dates a hit by its current publication period, not its first publication", () => {
+    expect(toJobCard(SEARCH_HIT)!.date).toBe("2026-07-20")
+    const { veroeffentlichungszeitraum, ...noPeriod } = SEARCH_HIT
+    expect(toJobCard(noPeriod)!.date).toBe("2026-03-02")
   })
 
   test("returns null when the reference number is missing", () => {
-    expect(toJobCard({ titel: "x" })).toBeNull()
+    expect(toJobCard({ stellenangebotsTitel: "x" })).toBeNull()
   })
 
-  test("falls back to beruf when titel is absent", () => {
-    const c = toJobCard({ refnr: "A-1", beruf: "Data Scientist" })!
+  test("falls back to hauptberuf when stellenangebotsTitel is absent", () => {
+    const c = toJobCard({ referenznummer: "A-1", hauptberuf: "Data Scientist" })!
     expect(c.title).toBe("Data Scientist")
   })
 
   test('treats the literal string "null" as a missing value', () => {
     const c = toJobCard({
-      refnr: "A-1",
-      titel: "T",
-      arbeitgeber: "null",
-      arbeitsort: { ort: "null", region: "null" },
+      referenznummer: "A-1",
+      stellenangebotsTitel: "T",
+      firma: "null",
+      stellenlokationen: [{ adresse: { ort: "null", region: "null" } }],
     })!
     expect(c.company).toBeNull()
     expect(c.location).toBeNull()
   })
 
   test("emits required keys even when values are unknown", () => {
-    const c = toJobCard({ refnr: "A-1" })!
+    const c = toJobCard({ referenznummer: "A-1" })!
     for (const k of ["id", "title", "company", "location", "date", "url"]) {
       expect(Object.keys(c)).toContain(k)
     }
@@ -69,11 +82,23 @@ describe("toJobCard", () => {
 
   test("does not repeat the region when it equals the city", () => {
     const c = toJobCard({
-      refnr: "A-1",
-      titel: "T",
-      arbeitsort: { ort: "Hamburg", region: "Hamburg", plz: "20095" },
+      referenznummer: "A-1",
+      stellenangebotsTitel: "T",
+      stellenlokationen: [{ adresse: { ort: "Hamburg", region: "HAMBURG", plz: "20095" } }],
     })!
     expect(c.location).toBe("20095 Hamburg")
+  })
+
+  test("writes the federal state the way people type it", () => {
+    const c = toJobCard({
+      referenznummer: "A-1",
+      stellenlokationen: [{ adresse: { ort: "Essen, Ruhr", region: "NORDRHEIN_WESTFALEN", plz: "45128" } }],
+    })!
+    expect(c.location).toBe("45128 Essen, Ruhr, Nordrhein-Westfalen")
+  })
+
+  test("survives a hit with no location block", () => {
+    expect(toJobCard({ referenznummer: "A-1" })!.location).toBeNull()
   })
 })
 
@@ -95,7 +120,7 @@ describe("toJobDetail", () => {
     referenznummer: "10000-1195268326-S",
   }
 
-  test("maps the detail vocabulary, which differs from search", () => {
+  test("maps the detail fields", () => {
     const d = toJobDetail(DETAIL, "10000-1195268326-S")
     expect(d.title).toBe("Machine Learning Engineer (m/w/d)")
     expect(d.company).toBe("OPTUM GmbH")
@@ -117,7 +142,15 @@ describe("toJobDetail", () => {
 
   test("humanises the SCREAMING_SNAKE region", () => {
     const d = toJobDetail(DETAIL, "x")
-    expect(d.location).toBe("74074 Heilbronn, Neckar, BADEN WUERTTEMBERG")
+    expect(d.location).toBe("74074 Heilbronn, Neckar, Baden-Württemberg")
+  })
+
+  test("drops the underscores from a region outside the 16 states", () => {
+    const d = toJobDetail(
+      { stellenlokationen: [{ adresse: { ort: "Basel", region: "AUSLAND_SCHWEIZ" } }] },
+      "x",
+    )
+    expect(d.location).toBe("Basel, AUSLAND SCHWEIZ")
   })
 
   test("survives a posting with no location block", () => {
@@ -176,14 +209,35 @@ describe("buildUrl", () => {
     const u = new URL(buildUrl({ ...base, query: "x", location: "Kiel", radius: 50 }))
     expect(u.searchParams.get("umkreis")).toBe("50")
   })
+
+  test("sends remote as the homeoffice filter, not as a working-time code", () => {
+    const u = new URL(buildUrl({ ...base, query: "x", worktime: "remote" }))
+    expect(u.searchParams.get("homeoffice")).toBe("prozentual_0;nv_true")
+    expect(u.searchParams.has("arbeitszeit")).toBe(false)
+  })
+
+  test("sends other working times as arbeitszeit", () => {
+    const u = new URL(buildUrl({ ...base, query: "x", worktime: "vollzeit" }))
+    expect(u.searchParams.get("arbeitszeit")).toBe("vz")
+    expect(u.searchParams.has("homeoffice")).toBe(false)
+  })
 })
 
 describe("code mappings", () => {
-  test("maps remote to the home-office working-time code", () => {
-    expect(workTimeCode("remote")).toBe("ho")
+  test("maps working times to their codes", () => {
     expect(workTimeCode("teilzeit")).toBe("tz")
+    expect(workTimeCode("schicht")).toBe("snw")
+    expect(workTimeCode("remote")).toBeNull()
     expect(workTimeCode(undefined)).toBeNull()
     expect(workTimeCode("nonsense")).toBeNull()
+  })
+
+  test("maps every home-office spelling to the homeoffice parameter", () => {
+    for (const m of ["remote", "homeoffice", "home-office", "REMOTE"]) {
+      expect(workTimeFilter(m)).toEqual(["homeoffice", "prozentual_0;nv_true"])
+    }
+    expect(workTimeFilter("teilzeit")).toEqual(["arbeitszeit", "tz"])
+    expect(workTimeFilter(undefined)).toBeNull()
   })
 
   test("maps offer types, defaulting to employment", () => {
