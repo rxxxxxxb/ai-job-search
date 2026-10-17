@@ -84,12 +84,13 @@ export interface JobCard {
   profession: string | null
   externalUrl: string | null
   startDate: string | null
+  /** `UNBEFRISTET` (permanent) or `BEFRISTET` (fixed-term); null when not stated. */
+  contractDuration: string | null
 }
 
 export interface JobDetail extends JobCard {
   description: string | null
   employmentType: string | null
-  contractDuration: string | null
   salary: string | null
   fullTime: boolean | null
   branch: string | null
@@ -167,6 +168,15 @@ function formatLocation(locations: unknown): string | null {
   return parts.length ? parts.join(", ") : null
 }
 
+/**
+ * Contract duration from `vertragsdauer`. `KEINE_ANGABE` is the API's "not stated"
+ * sentinel, mapped to null like the salary sentinel.
+ */
+function contractDuration(raw: Record<string, unknown>): string | null {
+  const v = nullish(raw.vertragsdauer)
+  return v && !v.startsWith("KEINE_ANGABE") ? v : null
+}
+
 /** Read `von` from a `{von, bis}` period object such as `eintrittszeitraum`. */
 function periodStart(period: unknown): string | null {
   if (!period || typeof period !== "object") return null
@@ -194,6 +204,7 @@ export function toJobCard(raw: Record<string, unknown>): JobCard | null {
     profession: nullish(raw.hauptberuf),
     externalUrl: nullish(raw.externeURL),
     startDate: periodStart(raw.eintrittszeitraum),
+    contractDuration: contractDuration(raw),
   }
 }
 
@@ -217,7 +228,7 @@ export function toJobDetail(raw: Record<string, unknown>, refnr: string): JobDet
     startDate: periodStart(raw.eintrittszeitraum),
     description: nullish(raw.stellenbeschreibung) ?? nullish(raw.stellenangebotsBeschreibung),
     employmentType: nullish(raw.stellenangebotsart),
-    contractDuration: nullish(raw.vertragsdauer),
+    contractDuration: contractDuration(raw),
     // "KEINE_ANGABEN" is the API's explicit "not stated" sentinel - surface it as
     // null rather than passing the sentinel through as if it were a salary.
     salary: salaryRaw && salaryRaw !== "KEINE_ANGABEN" ? salaryRaw : null,

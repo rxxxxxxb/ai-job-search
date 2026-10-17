@@ -82,9 +82,9 @@ Since v6, search uses the same field vocabulary as the detail endpoint.
 | `veroeffentlichungszeitraum.von` | `date` | `YYYY-MM-DD`, start of the current publication period. Falls back to `datumErsteVeroeffentlichung`, which can be months older for re-published ads (v4: `aktuelleVeroeffentlichungsdatum`) |
 | `eintrittszeitraum.von` | `startDate` | (v4: `eintrittsdatum`) |
 | `externeURL` | `externalUrl` | Present only when the employer posts via a partner site. Capital `URL` (v4: `externeUrl`) |
+| `vertragsdauer` | `contractDuration` | `UNBEFRISTET` / `BEFRISTET`; the `KEINE_ANGABE` sentinel becomes `null` |
 
-Other fields seen on v6 hits: `stellenangebotsart`, `vertragsdauer` (`UNBEFRISTET` /
-`BEFRISTET` / `KEINE_ANGABE`), `verguetungsangabe`, `gehaltsspanneVon`/`gehaltsspanneBis`,
+Other fields seen on v6 hits: `stellenangebotsart`, `verguetungsangabe`, `gehaltsspanneVon`/`gehaltsspanneBis`,
 `arbeitszeitVollzeit` and the other `arbeitszeit*` booleans, `homeofficemoeglich`,
 `homeofficetyp`, `homeofficeprozent`, `datumErsteVeroeffentlichung`, `aenderungsdatum`,
 `alleBerufe`, `arbeitgeberKundennummerHash`, `chiffrenummer`, `entfernung`.
@@ -138,7 +138,7 @@ same vocabulary. Detail-specific mappings:
 | `stellenlokationen[0].adresse` | `location` |
 | `datumErsteVeroeffentlichung` | `date` (first publication; search uses the current publication period) |
 | `eintrittszeitraum.von` | `startDate` |
-| `vertragsdauer` | `contractDuration` (`UNBEFRISTET` / `BEFRISTET`) |
+| `vertragsdauer` | `contractDuration` (`UNBEFRISTET` / `BEFRISTET`; `KEINE_ANGABE` → `null`) |
 | `arbeitszeitVollzeit` | `fullTime` (boolean) |
 | `verguetungsangabe` | `salary` |
 | `istPrivateArbeitsvermittlung` | `isPrivateAgency` (boolean) |

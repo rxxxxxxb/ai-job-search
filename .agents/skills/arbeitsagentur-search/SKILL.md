@@ -113,12 +113,13 @@ bun run .agents/skills/arbeitsagentur-search/cli/src/cli.ts detail 10001-1003435
       "id": "10001-1003435354-S",
       "title": "AI Engineer (m/w/d) – Machine Learning & Data Science",
       "company": "Brillux GmbH & Co.KG",
-      "location": "48163 Münster, Westfalen",
+      "location": "48163 Münster, Westfalen, Nordrhein-Westfalen",
       "date": "2026-07-23",
       "url": "https://www.arbeitsagentur.de/jobsuche/jobdetail/10001-1003435354-S",
       "profession": "Data Scientist",
       "externalUrl": null,
-      "startDate": "2026-07-28"
+      "startDate": "2026-07-28",
+      "contractDuration": "UNBEFRISTET"
     }
   ]
 }
@@ -126,6 +127,8 @@ bun run .agents/skills/arbeitsagentur-search/cli/src/cli.ts detail 10001-1003435
 
 `meta.total` is the server-side total match count, not the number returned — useful for
 judging whether a query is too broad. Missing values are `null`, never omitted.
+`contractDuration` is `UNBEFRISTET` (permanent), `BEFRISTET` (fixed-term) or `null` when the
+posting does not say - roughly 40% of postings in a sample of 100.
 
 Errors go to **stderr** as `{"error": "...", "code": "..."}` with exit code `1`.
 

@@ -30,6 +30,7 @@ const SEARCH_HIT = {
   veroeffentlichungszeitraum: { von: "2026-07-20" },
   datumErsteVeroeffentlichung: "2026-03-02",
   eintrittszeitraum: { von: "2026-08-01" },
+  vertragsdauer: "UNBEFRISTET",
   externeURL: "https://www.yourfirm.de/job/detail/YF-44420/",
 }
 
@@ -45,6 +46,13 @@ describe("toJobCard", () => {
     expect(c.profession).toBe("Machine Learning Engineer")
     expect(c.externalUrl).toBe("https://www.yourfirm.de/job/detail/YF-44420/")
     expect(c.startDate).toBe("2026-08-01")
+  })
+
+  test("carries the contract duration, with the not-stated sentinel as null", () => {
+    expect(toJobCard(SEARCH_HIT)!.contractDuration).toBe("UNBEFRISTET")
+    expect(toJobCard({ ...SEARCH_HIT, vertragsdauer: "BEFRISTET" })!.contractDuration).toBe("BEFRISTET")
+    expect(toJobCard({ ...SEARCH_HIT, vertragsdauer: "KEINE_ANGABE" })!.contractDuration).toBeNull()
+    expect(toJobCard({ referenznummer: "A-1" })!.contractDuration).toBeNull()
   })
 
   test("dates a hit by its current publication period, not its first publication", () => {
@@ -128,6 +136,10 @@ describe("toJobDetail", () => {
     expect(d.contractDuration).toBe("UNBEFRISTET")
     expect(d.fullTime).toBe(true)
     expect(d.isPrivateAgency).toBe(true)
+  })
+
+  test("maps the KEINE_ANGABE contract sentinel to null, not through", () => {
+    expect(toJobDetail({ ...DETAIL, vertragsdauer: "KEINE_ANGABE" }, "x").contractDuration).toBeNull()
   })
 
   test('maps the KEINE_ANGABEN salary sentinel to null, not through', () => {

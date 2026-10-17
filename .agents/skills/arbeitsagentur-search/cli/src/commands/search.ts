@@ -114,7 +114,9 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
           : cards
               .map(
                 (c) =>
-                  `${c.title}\n  ${c.company || "—"} · ${c.location || "—"} · ${c.date || "—"}\n  id: ${c.id}\n  ${c.url}`,
+                  `${c.title}\n  ${c.company || "—"} · ${c.location || "—"} · ${c.date || "—"}` +
+                  (c.contractDuration ? ` · ${c.contractDuration}` : "") +
+                  `\n  id: ${c.id}\n  ${c.url}`,
               )
               .join("\n\n")) + "\n",
       )
