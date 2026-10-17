@@ -32,6 +32,11 @@ import subprocess
 import unittest
 from pathlib import Path
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 REPO = Path(__file__).resolve().parent.parent
 RESET = REPO / ".claude" / "commands" / "reset.md"
 SETUP = REPO / ".claude" / "commands" / "setup.md"
@@ -112,6 +117,12 @@ def setup_step3_skill_files():
     return files
 
 
+# setup_step3_skill_files() resolves /setup's targets against the files on disk,
+# so it needs the personalised skill files that setUp asserts on.
+@requires_files(
+    REPO / ".claude" / "skills" / "job-application-assistant" / "04-job-evaluation.md",
+    REPO / ".claude" / "skills" / "job-scraper" / "search-queries.md",
+)
 class TestResetCoversEveryPersonalizedSkillFile(unittest.TestCase):
     def setUp(self):
         self.text = RESET.read_text(encoding="utf-8")

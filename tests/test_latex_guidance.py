@@ -18,6 +18,11 @@ import re
 import unittest
 from pathlib import Path
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 REPO = Path(__file__).resolve().parent.parent
 SKILL_DIR = REPO / ".claude" / "skills" / "job-application-assistant"
 CV_TEMPLATES = SKILL_DIR / "05-cv-templates.md"
@@ -70,9 +75,11 @@ class TestBulletBracketTrap(unittest.TestCase):
     def test_example_cover_letter_has_no_bracket_labelled_bullets(self):
         self.assert_no_unbraced_bracket_items(EXAMPLE_COVER)
 
+    @requires_files(COVER_TEMPLATES)
     def test_cover_letter_guide_does_not_teach_the_broken_pattern(self):
         self.assert_no_unbraced_bracket_items(COVER_TEMPLATES)
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_does_not_teach_the_broken_pattern(self):
         self.assert_no_unbraced_bracket_items(CV_TEMPLATES)
 
@@ -92,12 +99,15 @@ class TestSpecialCharacterGuidance(unittest.TestCase):
             f"{path.name}'s special-characters section is missing: {missing}",
         )
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_documents_the_escapes(self):
         self.assert_escapes_documented(CV_TEMPLATES)
 
+    @requires_files(COVER_TEMPLATES)
     def test_cover_letter_guide_documents_the_escapes(self):
         self.assert_escapes_documented(COVER_TEMPLATES)
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_warns_that_percent_truncates_silently(self):
         body = section(
             CV_TEMPLATES.read_text(encoding="utf-8"), "LaTeX Special Characters"
@@ -132,6 +142,7 @@ class TestAtsExtractionEncoding(unittest.TestCase):
     def test_apply_extraction_command_pins_utf8(self):
         self.assert_pdftotext_commands_pin_utf8(APPLY)
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_extraction_command_pins_utf8(self):
         self.assert_pdftotext_commands_pin_utf8(CV_TEMPLATES)
 
@@ -172,6 +183,7 @@ class TestPdflatexFontEncodingGuard(unittest.TestCase):
     def test_example_cv_guards_fontenc_for_pdflatex(self):
         self.assert_has_guarded_fontenc(EXAMPLE_CV)
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_preamble_guards_fontenc_for_pdflatex(self):
         self.assert_has_guarded_fontenc(CV_TEMPLATES)
 

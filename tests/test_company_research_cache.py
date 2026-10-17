@@ -14,6 +14,11 @@ the next consumer to find.
 import unittest
 from pathlib import Path
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 REPO = Path(__file__).resolve().parent.parent
 EVALUATION = REPO / ".claude" / "skills" / "job-application-assistant" / "04-job-evaluation.md"
 APPLY = REPO / ".claude" / "commands" / "apply.md"
@@ -50,6 +55,7 @@ def _interview_research_step() -> str:
     return ""
 
 
+@requires_files(EVALUATION)
 class TestCacheDefinition(unittest.TestCase):
     def setUp(self):
         self.text = EVALUATION.read_text(encoding="utf-8")

@@ -14,6 +14,11 @@ import unittest
 from pathlib import Path
 
 try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
+try:
     import yaml  # noqa: F401 - only probing availability for the lint integration test
     _HAVE_YAML = True
 except ImportError:
@@ -147,6 +152,7 @@ class RankCommandSpec(unittest.TestCase):
                 "do-not-drop instruction covers it",
             )
 
+    @requires_files(EVALUATION)
     def test_evaluation_framework_acknowledges_language_gate_tracking(self):
         """04-job-evaluation.md is the authoritative file /rank tells its agents
         to read. Its Language Gate preamble once said the gate result "is not a
