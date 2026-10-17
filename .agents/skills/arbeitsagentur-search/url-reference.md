@@ -119,8 +119,10 @@ Verified endpoint behaviour:
 | `pc/v1/jobdetails/{base64}` | 403 |
 | `ed/v1/jobdetails/{base64}` | 403 |
 
-**`403` means "not found"** on this endpoint (unknown or expired reference number), not an
-auth failure — the key is always sent. The CLI maps `403`/`404` to `null` → `NOT_FOUND`.
+An unknown or expired reference number returns **`404`** (re-verified 2026-10-17; in July the
+API answered `403` here). The CLI maps `404` to `null` → `NOT_FOUND`, and treats `403` as an
+error: the gateway sends it when it refuses a request or no longer routes a path, which is how
+the v4 search shutdown showed up. The `403` rows in the table above date from July.
 
 ### Detail fields
 

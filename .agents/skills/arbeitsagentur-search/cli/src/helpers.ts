@@ -26,9 +26,11 @@ export function writeError(error: string, code: string): void {
 }
 
 /**
- * Fetch JSON with exponential backoff + jitter on 429/5xx. Returns null on 404
- * (and on 403, which this API returns for an unknown/expired reference number)
- * rather than throwing, so a single dead posting cannot abort a batch.
+ * Fetch JSON with exponential backoff + jitter on 429/5xx. Returns null on 404 -
+ * the API's answer for an unknown or expired reference number - rather than
+ * throwing, so a single dead posting cannot abort a batch. A 403 is an error: the
+ * gateway sends it when it refuses the request or no longer routes the path, and
+ * reading it as "nothing found" is what hid the v4 shutdown.
  */
 export async function jsonFetch<T>(url: string): Promise<T | null> {
   const maxRetries = 6
@@ -55,10 +57,14 @@ export async function jsonFetch<T>(url: string): Promise<T | null> {
       continue
     }
 
-    // 404: no such posting. 403: this API's response for an unknown reference
-    // number as well as for a missing key - the key is always sent here, so at
-    // this point it means "not found".
-    if (response.status === 404 || response.status === 403) return null
+    if (response.status === 404) return null
+
+    if (response.status === 403) {
+      throw new Error(
+        `Request refused: 403 ${response.statusText} - the API rejected the request or no ` +
+          "longer serves this path (see url-reference.md)",
+      )
+    }
 
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status} ${response.statusText}`)

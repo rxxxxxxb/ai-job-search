@@ -141,10 +141,14 @@ Errors go to **stderr** as `{"error": "...", "code": "..."}` with exit code `1`.
 - **Search runs on the API's v6 endpoint, detail on v4.** Since v6, search uses the same
   field names as detail (`stellenangebotsTitel`, `firma`, `stellenlokationen`); v4 search
   is switched off. The mapping is documented in `url-reference.md`.
-- **Detail is keyed by base64 of the reference number.** The raw refnr returns 403 on the
+- **Detail is keyed by base64 of the reference number.** The raw refnr returns 404 on the
   detail endpoint; the CLI handles the encoding.
-- **403 means "not found" here**, not "forbidden" — the API returns it for unknown or
-  expired reference numbers. The CLI maps it to a `NOT_FOUND` error rather than a crash.
+- **404 means "not found"**: an unknown or expired reference number. The CLI maps it to a
+  `NOT_FOUND` error rather than a crash.
+- **403 is an error, never "no results".** The API gateway sends it when it refuses a
+  request or no longer serves a path; the CLI exits 1 with the status text. Likewise, a
+  response that reports matches but carries no readable result list exits 1 instead of
+  printing an empty list, so an API change cannot pass for a quiet day.
 - **`verguetungsangabe: "KEINE_ANGABEN"`** is the API's "salary not stated" sentinel. The
   CLI maps it to `null` rather than passing the sentinel through.
 - **The literal string `"null"`** appears in place of missing address parts. The CLI

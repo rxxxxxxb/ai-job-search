@@ -46,6 +46,37 @@ export function buildUrl(opts: SearchOpts): string {
   return `${SEARCH_URL}?${params.toString()}`
 }
 
+/**
+ * Turn a search response into result cards, refusing to report "no results" when
+ * the response does not look like a result list. A genuine empty search returns
+ * `maxErgebnisse: 0` and no `ergebnisliste`; anything else that yields no cards
+ * means the endpoint or its response format has changed.
+ */
+export function extractCards(data: SearchResponse | null, page: number): JobCard[] {
+  if (data === null) {
+    throw new Error("search endpoint returned 404 - the API path may have moved (see url-reference.md)")
+  }
+  const raw = Array.isArray(data.ergebnisliste) ? data.ergebnisliste : []
+  const total = typeof data.maxErgebnisse === "number" ? data.maxErgebnisse : null
+
+  // Past the last page a missing list is expected, so only page 1 can tell.
+  if (raw.length === 0 && (total === null || (page === 1 && total > 0))) {
+    throw new Error(
+      `the API reported ${total ?? "an unknown number of"} matches but sent no result list - ` +
+        "its response format may have changed (see url-reference.md)",
+    )
+  }
+
+  const cards = raw.map((r) => toJobCard(r)).filter((c): c is JobCard => c !== null)
+  if (raw.length > 0 && cards.length === 0) {
+    throw new Error(
+      `the API returned ${raw.length} listings but none could be read - its field names may ` +
+        "have changed (see url-reference.md)",
+    )
+  }
+  return cards
+}
+
 function renderTable(cards: JobCard[]): string {
   if (cards.length === 0) return "No results."
   const rows = cards.map((c) => {
@@ -70,11 +101,7 @@ function renderTable(cards: JobCard[]): string {
 export async function runSearch(opts: SearchOpts): Promise<number> {
   try {
     const data = await jsonFetch<SearchResponse>(buildUrl(opts))
-    const raw = data?.ergebnisliste ?? []
-
-    let cards = raw
-      .map((r) => toJobCard(r))
-      .filter((c): c is JobCard => c !== null)
+    let cards = extractCards(data, opts.page)
 
     if (opts.limit !== undefined && opts.limit >= 0) cards = cards.slice(0, opts.limit)
 
