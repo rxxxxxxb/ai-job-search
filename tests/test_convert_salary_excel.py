@@ -7,6 +7,7 @@ from salary_lookup import format_entry
 from tools.convert_salary_excel import (
     INDEX_PATTERNS,
     detect_column_type,
+    COMPANY_PATTERNS,
     header_matches,
     parse_numeric_cell,
     parse_sheet,
@@ -107,6 +108,22 @@ class DetectColumnTypeTests(unittest.TestCase):
                 self.assertEqual(
                     companies[0]["categories"]["salary"], {"index": 105.5}
                 )
+
+    def test_parse_sheet_detects_danish_compound_company_header(self):
+        # The IDA workbook heads its company column "Firmanavn og by": "firma"
+        # glued to "navn". Whole-token matching alone skipped the entire sheet
+        # ("Could not find header row") from #75 until "firma" joined
+        # COMPOUND_PATTERNS, so the shipped demonstration data no longer
+        # converted at all.
+        self.assertTrue(header_matches("Firmanavn og by", COMPANY_PATTERNS))
+        ws = FakeWorksheet([
+            ("Firmanavn og by", "Antal", "Indeks"),
+            ("Example A/S, Aarhus", 12, 105.0),
+        ])
+        companies = parse_sheet(ws)
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Example A/S, Aarhus")
+        self.assertEqual(companies[0]["categories"]["all_employees"], {"count": 12, "index": 105.0})
 
     def test_parse_sheet_detects_city_column_with_token_header(self):
         # City headers are matched with the same token-based header_matches()

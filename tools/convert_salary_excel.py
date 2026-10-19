@@ -26,6 +26,7 @@ with paired count/index columns per category, it groups them automatically.
 """
 
 import json
+import math
 import sys
 import argparse
 import re
@@ -46,8 +47,9 @@ INDEX_PATTERNS = {"indeks", "index", "idx", "salary", "løn", "median", "average
 # header token, for languages that glue words together (e.g. Danish "lønindeks"
 # -> løn + indeks). Languages that write headers as separate words need none.
 # Ships populated for this repo's Danish demonstration data; a fork targeting
-# another locale edits this constant.
-COMPOUND_PATTERNS = {"antal", "indeks", "løn", "gennemsnit", "medarbejdere"}
+# another locale edits this constant. "firma" is here because the IDA workbook
+# heads its company column "Firmanavn og by" (firma + navn glued together).
+COMPOUND_PATTERNS = {"firma", "antal", "indeks", "løn", "gennemsnit", "medarbejdere"}
 # Identifier columns (employee id, Danish "personnummer", etc.) are never salary
 # data. They are dropped at classification so they are not mistaken for a salary
 # category. Matched as whole tokens only, like other pattern sets.
@@ -57,14 +59,22 @@ ID_PATTERNS = {"id", "personnummer"}
 DEFAULT_CATEGORY = "all_employees"
 
 
+def _finite_float(value):
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("salary values must be finite")
+    return number
+
+
 def parse_numeric_cell(value):
     """Parse numeric Excel values, including localized string cells."""
     if isinstance(value, (int, float)):
-        return float(value)
+        return _finite_float(value)
     if not isinstance(value, str):
         raise ValueError("not numeric")
 
-    text = value.strip().replace("\u00a0", " ").replace(" ", "")
+    # Localized exports also use narrow no-break and thin spaces for grouping.
+    text = "".join(value.split())
     if not text:
         raise ValueError("not numeric")
     if "," in text and "." in text:
@@ -82,7 +92,7 @@ def parse_numeric_cell(value):
     elif "." in text:
         if re.fullmatch(r"[+-]?\d+\.\d{3}", text):
             raise ValueError("ambiguous dot separator")
-    return float(text)
+    return _finite_float(text)
 
 
 def header_matches(header, patterns):
@@ -190,6 +200,12 @@ def parse_sheet(ws, sheet_label=None):
         elif header_matches(h, CITY_PATTERNS):
             city_col = i
 
+    # A qualified salary header such as "Company Index" may also contain a
+    # metadata token. Prefer an unqualified metadata column when one exists,
+    # leaving the qualified column available as salary data.
+    company_col = next((i for i, h in enumerate(headers) if h.lower() in COMPANY_PATTERNS), company_col)
+    city_col = next((i for i, h in enumerate(headers) if h.lower() in CITY_PATTERNS), city_col)
+
     if company_col is None:
         print(f"Warning: Could not find company column in sheet '{ws.title}'.", file=sys.stderr)
         return []
@@ -279,6 +295,8 @@ def parse_sheet(ws, sheet_label=None):
             continue
 
         company_name = str(row[company_col]).strip()
+        if not company_name:
+            continue
         if city_col is not None and city_col < len(row) and row[city_col]:
             city_name = str(row[city_col]).strip()
         else:
@@ -379,10 +397,9 @@ def main():
     wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
 
     all_companies = []
-    for sheet_name in wb.sheetnames:
-        print(f"  Parsing sheet: {sheet_name}")
-        ws = wb[sheet_name]
-        companies = parse_sheet(ws, sheet_label=sheet_name)
+    for ws in wb.worksheets:
+        print(f"  Parsing sheet: {ws.title}")
+        companies = parse_sheet(ws, sheet_label=ws.title)
         all_companies.extend(companies)
 
     wb.close()

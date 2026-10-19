@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -119,7 +120,7 @@ def main() -> int:
     for rel_path in FRAMEWORK_FILES:
         local_path = ROOT / rel_path
         if not local_path.exists():
-            print(f"Local file missing: {rel_path}")
+            errors.append(f"Local file missing: {rel_path}")
             continue
 
         # Get local version
@@ -145,6 +146,7 @@ def main() -> int:
             errors.append(f"Local file {rel_path} is missing 'framework_version' in frontmatter.")
             continue
         if not upstream_ver:
+            errors.append(f"Upstream file {rel_path} is missing 'framework_version' in frontmatter.")
             continue
             
         if parse_semver(upstream_ver) > parse_semver(local_ver):
@@ -188,7 +190,7 @@ def main() -> int:
     # answers "which upstream commits deserve review". Point at the companion.
     print(
         f"\nFor commit-level triage of upstream commits, run: "
-        f"python3 tools/upstream_triage.py --remote {remote}"
+        f"python3 tools/upstream_triage.py --remote {shlex.quote(remote)} --branch {shlex.quote(args.branch)}"
     )
     return 0
 
