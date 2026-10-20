@@ -248,6 +248,7 @@ class TestResetTargetsTheHeadingsTheShippedFilesHave(unittest.TestCase):
     def setUp(self):
         self.reset = RESET.read_text(encoding="utf-8")
 
+    @requires_files(SKILL_DIR / "01-candidate-profile.md", SKILL_DIR / "02-behavioral-profile.md")
     def test_full_file_skeletons_keep_the_shipped_headings(self):
         for filename in ("01-candidate-profile.md", "02-behavioral-profile.md"):
             with self.subTest(file=filename):
@@ -277,6 +278,7 @@ class TestResetTargetsTheHeadingsTheShippedFilesHave(unittest.TestCase):
         self.assertFalse(appear_in_order(skeleton, ["## Identity", "## Awards"]))
         self.assertFalse(appear_in_order(skeleton, ["## Education", "## Identity", "## Awards"]))
 
+    @requires_files(SKILL_DIR / "01-candidate-profile.md", SKILL_DIR / "02-behavioral-profile.md")
     def test_full_file_skeletons_keep_the_framework_version_frontmatter(self):
         # The shipped files open with a `framework_version` marker that
         # check_framework_version.py requires and check_upstream_updates.py
@@ -305,6 +307,7 @@ class TestResetTargetsTheHeadingsTheShippedFilesHave(unittest.TestCase):
                     f"a reset must leave {filename}'s framework_version readable and unchanged",
                 )
 
+    @requires_files(SKILL_DIR / "01-candidate-profile.md")
     def test_candidate_skeleton_keeps_the_languages_table_under_identity(self):
         # 04-job-evaluation.md's Language Gate and job-scraper/search-queries.md
         # both read "your Languages table" from 01-candidate-profile.md. The
@@ -327,6 +330,7 @@ class TestResetTargetsTheHeadingsTheShippedFilesHave(unittest.TestCase):
                 self.assertIn(row, identity)
         self.assertNotIn("[LANGUAGE]", block, "a reset must not reintroduce a placeholder data row")
 
+    @requires_files(SKILL_DIR / "05-cv-templates.md", SKILL_DIR / "07-interview-prep.md")
     def test_partial_anchors_exist_in_the_files_they_target(self):
         # (reset.md anchor phrase, file, heading the replacement must re-emit)
         cases = (

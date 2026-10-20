@@ -18,6 +18,11 @@ try:
 except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
     from _upstream import is_upstream_checkout
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 REPO = Path(__file__).resolve().parent.parent
 COMMAND = REPO / ".claude" / "commands" / "setup.md"
 SKILL_DIR = REPO / ".claude" / "skills" / "job-application-assistant"
@@ -93,6 +98,7 @@ class TemplatesStillCarryThePlaceholders(unittest.TestCase):
         self.assertIn("\\signature{[YOUR_NAME]}", text)
 
 
+@requires_files(SKILL_DIR / "02-behavioral-profile.md")
 class SetupPathAWritesIntoSectionsTheShippedFilesHave(unittest.TestCase):
     """Step A7 named 02-behavioral-profile.md sections that do not exist.
 

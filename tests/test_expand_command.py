@@ -4,6 +4,11 @@ import re
 import unittest
 from pathlib import Path
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPAND_COMMAND_FILE = REPO_ROOT / ".claude" / "commands" / "expand.md"
 BEHAVIORAL_PROFILE = REPO_ROOT / ".claude" / "skills" / "job-application-assistant" / "02-behavioral-profile.md"
@@ -41,6 +46,7 @@ class ExpandCommandTests(unittest.TestCase):
         self.assertIn("Portfolio & projects grounded in code", text)
         self.assertNotIn("documents/projects/", text)
 
+    @requires_files(BEHAVIORAL_PROFILE)
     def test_behavioral_additions_name_sections_the_shipped_file_has(self):
         # Step 5 told the model to append to "Strongest Behavioral Traits" or
         # "How I Work Best" and to "match existing structure" - but the shipped

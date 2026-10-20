@@ -193,6 +193,7 @@ class TestGeometryScaleAlignment(unittest.TestCase):
 
     GEOMETRY_SCALE = re.compile(r"\\usepackage\[scale=([0-9.]+)\]\{geometry\}")
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_and_example_cv_share_geometry_scale(self):
         cv_match = self.GEOMETRY_SCALE.search(EXAMPLE_CV.read_text(encoding="utf-8"))
         guide_match = self.GEOMETRY_SCALE.search(CV_TEMPLATES.read_text(encoding="utf-8"))
