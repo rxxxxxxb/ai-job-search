@@ -56,6 +56,24 @@ list and its field names differ from v4; see below.
 | `page` | Page number | **1-indexed** |
 | `size` | Results per page | Max 100 |
 
+### Query syntax of `was`
+
+Measured 2026-11-24 through the CLI (`search -q ... -l Deutschland`, server-side `total`):
+
+| `-q` value | Matches | Reading |
+|------------|--------:|---------|
+| `Machine` | 624 | |
+| `Machine Learning` | 450 | bare words must all appear |
+| `Learning Machine` | 450 | in any order |
+| `"Machine Learning"` | 421 | double quotes narrow further ... |
+| `"Learning Machine"` | 0 | ... to an exact phrase, word order included |
+| `Machine OR Learning` | 73 | `OR` is not an operator; it is matched as a word |
+| `medizinische Bildverarbeitung` | 12 | |
+| `"medizinische Bildverarbeitung"` | 0 | quoting can wipe out a German term entirely |
+
+Bare multi-word terms are therefore already precise, and quoting costs recall. The SKILL.md
+`Query syntax:` line tells `/scrape` to pass multi-word terms bare, one term per call.
+
 ### Response
 
 ```json

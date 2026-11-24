@@ -49,6 +49,8 @@ No personal-use restriction applies — unlike `linkedin-search`.
 bun run .agents/skills/arbeitsagentur-search/cli/src/cli.ts search [flags]
 ```
 
+Query syntax: bare words must all appear, in any order; double quotes inside the argument (`-q '"machine learning"'`) force an exact phrase, word order included, and can return nothing for German phrases, so pass multi-word terms bare; no OR (it is matched as an ordinary word). Evidence in `url-reference.md`.
+
 | Flag | Description |
 |------|-------------|
 | `--query`, `-q` | Keywords: job title, skill, or role. e.g. `"Machine Learning Engineer"` |
