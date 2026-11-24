@@ -6,6 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "tools" / "check_upstream_updates.py"
@@ -186,6 +191,8 @@ class UpstreamRefMissingFileTests(UpstreamCheckerRepoFixture):
         self.assertIn("[WARNING]", result.stdout)
 
 
+# setUp copies every framework file, and a fork may keep the profile files (01-07) untracked.
+@requires_files(*(REPO_ROOT / rel for rel in FRAMEWORK_FILES))
 class LegacyEncodingTests(UpstreamCheckerRepoFixture):
     def setUp(self):
         super().setUp()

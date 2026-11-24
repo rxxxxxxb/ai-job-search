@@ -27,6 +27,11 @@ import re
 import unittest
 from pathlib import Path
 
+try:
+    from tests._local_files import requires_files
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _local_files import requires_files
+
 REPO = Path(__file__).resolve().parent.parent
 
 SPEC_GLOBS = (
@@ -66,6 +71,10 @@ def command_lines(text):
 
 
 class SpecPythonSpellingTest(unittest.TestCase):
+    @requires_files(
+        REPO / ".claude" / "skills" / "job-application-assistant" / "04-job-evaluation.md",
+        REPO / ".claude" / "skills" / "job-application-assistant" / "05-cv-templates.md",
+    )
     def test_glob_covers_every_known_tool_spec(self):
         missing = KNOWN_TOOL_SPECS - set(SPECS)
         self.assertEqual(missing, set(), f"spec glob no longer finds {sorted(missing)}")

@@ -197,12 +197,14 @@ class TestMissingPackageGuidance(unittest.TestCase):
 
     HEADING = "Missing LaTeX packages"
 
+    @requires_files(CV_TEMPLATES)
     def test_cv_guide_states_the_rule(self):
         body = section(CV_TEMPLATES.read_text(encoding="utf-8"), self.HEADING)
         self.assertIsNotNone(body, f"05-cv-templates.md needs a '{self.HEADING}' section")
         self.assertIn("tlmgr search --global --file", body)
         self.assertIn("never run `sudo`", body.lower(), "the rule must say what to do when an install needs root")
 
+    @requires_files(COVER_TEMPLATES)
     def test_every_compile_loop_points_to_the_rule(self):
         add_template = REPO / ".claude" / "commands" / "add-template.md"
         for path in (COVER_TEMPLATES, APPLY, add_template):
