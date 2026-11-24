@@ -157,3 +157,9 @@ future plan.md
 # Reusable templates that carry real name and contact details
 cover_letters/old_cover.tex
 cv/old_resume.tex
+# Portal CLIs copied from ai-job-search-dev/community-portals (portals/global/).
+# Third-party code used as a local install, not committed: to update, copy the
+# folder again from community-portals and re-run tools/install_portal_clis.py.
+# The fork's own portal, arbeitsagentur-search, stays tracked.
+.agents/skills/linkedin-search/
+.agents/skills/freehire-search/
