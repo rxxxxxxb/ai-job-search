@@ -26,6 +26,8 @@ Follow these steps **in order**.
 
 Never read `job_scraper/seen_jobs.json` into the conversation. It holds every job the workspace has ever seen - most of it `skipped` - while a run only ever touches the handful of entries being scored, so a manual read costs the whole backlog on every run and grows for the life of the workspace. Selecting candidates is a query, so run the query:
 
+> **Windows:** run these tools as `python`, not `python3`. A python.org install ships no `python3`, so that name reaches the Microsoft Store alias, which either exits 49 with no output (#669) or starts a separate Store Python without the packages `pip` installed (such as pypdf). `.claude/settings.json` allows both spellings.
+
 ```bash
 python3 tools/rank_state.py candidates --limit 10          # add --all / --focus "<text>" per Step 0
 ```
@@ -54,19 +56,19 @@ State how many jobs will be ranked and how many are deferred before proceeding.
 
 Dispatch parallel **`posting-scorer`** agents via the **Agent tool** (`subagent_type: posting-scorer`, the shipped definition in `.claude/agents/posting-scorer.md`: Read, WebFetch, WebSearch and the allowlisted Bash only - no Edit, no Write, because these agents hold untrusted posting text), ~5 jobs per agent (a single agent is fine for ≤5 jobs). Token-efficiency rules, consistent with `/apply`:
 
-- Pass each agent everything it needs **inline in the prompt** - the job list (title, company, URL) and a compact scoring rubric extracted from the files you read in Step 1: the strong/moderate/weak skill match areas, direct/adjacent experience domains, behavioral thrive/drain factors, career goals, deal-breakers, and the location constraints. Do **not** make agents re-read the profile files.
+- Pass each agent everything it needs **inline in the prompt** - the job list (`key`, title, company, URL - the `key` exactly as Step 1's `candidates` output printed it, because the agent must echo it back and cannot derive it: it is a company+title slug from `tools/job_key.py`, not the URL) and a compact scoring rubric extracted from the files you read in Step 1: the strong/moderate/weak skill match areas, direct/adjacent experience domains, behavioral thrive/drain factors, career goals, deal-breakers, and the location constraints. Do **not** make agents re-read the profile files.
 - Agents fetch each posting URL following the escalation order in `.claude/skills/job-application-assistant/09-web-research.md` (using the installed portal CLI's `detail` command when the URL belongs to a portal in `.agents/skills/`, or `WebFetch` otherwise) and score **only from actually fetched content** - never from the title alone, never from fabricated posting content. A job that is not scored gets one of two statuses, and they mean different things:
   - `expired` - **positive evidence the posting is closed**: the page says it is no longer available or the deadline has passed, the server answers 410 Gone, or the URL redirects to a listing page instead of the posting.
   - `unreachable` - **retrieval failed, so nothing is known about the posting**: 401/403 or a login wall, a 404, a timeout, a 5xx, or an empty or unparseable page. The agent adds `"fetch_error"`, one short plain-text line naming the failure (e.g. `"403 after curl retry"`). A 404 is `unreachable`, not `expired`: links break while postings stay live (#538 was one).
 - **Before returning `unreachable` or `expired`, the agent must exhaust the escalation order** in `09-web-research.md`: installed portal CLI first, then `WebFetch`, then `python3 tools/fetch_page.py` with browser headers (it enforces `robots.txt` itself), then search for the employer's own careers site. A `WebFetch` 403 is a rejected *client*, not a missing page, and retrying with browser headers via `fetch_page.py` recovers most corporate and bank domains. A stored URL ending in a `#fragment` points at a listing page rather than a posting, so the agent should search the employer's own careers site for the role by name before writing the job off. Include this instruction in every scoring agent's prompt. Neither status means "the first fetch was unhelpful".
-- Scope is triage: posting text vs. rubric. **No company research, no salary lookup, no web searches** - that depth belongs to `/apply`.
+- Scope is triage: posting text vs. rubric. A web search is allowed only for the escalation's last step above: finding the employer's own copy of the posting. **No company research or salary lookup** - that depth belongs to `/apply`.
 - **Every fetched body passes `tools/posting_guard.py` before it is scored.** Portal CLI output is piped (`... detail '<URL>' --format plain | python3 tools/posting_guard.py --text --json`), a `fetch_page.py --out` file is passed with `--in <file> --html --json`, and `WebFetch` output goes through a quoted heredoc with `--text --json`. The agent scores from the **cleaned** text and returns the gate's first line verbatim as `"guard"` (`"clean"` when clean). A flagged posting is still scored - the flag is for the user, not a veto. Include this instruction in every scoring agent's prompt.
 
 Each agent returns a JSON array, one object per job:
 
 ```json
 {
-  "key": "<the job's key in job_scraper/seen_jobs.json>",
+  "key": "<the key from the orchestrator's job list, echoed back unchanged>",
   "status": "scored" | "expired" | "unreachable",
   "fetch_error": "<one short line, only when unreachable>",
   "scores": { "technical": 0-100, "experience": 0-100, "behavioral": 0-100, "career": 0-100 },
@@ -164,8 +166,10 @@ Swept <S> previously ranked entries (<E> newly expired, <C> closing soon).
 | 1 | 78 | Strong Fit | ... | ... | ... | ... | 🔥 | [Link](...) |
 
 ### Why these ranked highest
-**1. <Title> at <Company> (78)** - [2-3 strength bullets and the honest gap, from the agent's findings]
+**1. <Title> at <Company> (78)**[ · <employment type>] - [2-3 strength bullets and the honest gap, from the agent's findings]
 [repeat for each shortlisted job]
+
+**Employment type:** show a shortlisted entry's stored `employment_type` (`full_time`, `part_time`, `contract`, `freelance`) after the score in its "Why these ranked highest" line, as above. The ` · <employment type>` part is bracketed because it is optional: leave out the whole bracket, separator included, when the value is `null` or the key is missing, so no dangling `·` is left behind. If the profile or `CLAUDE.md` states what kind of engagement the user wants (for example "contract only" under career goals) and the stored type differs, add a visible ⚠ marker naming both (e.g. "⚠ full_time, profile prefers contract"). Same treatment as a location or language FLAG: a signal for the user to judge, never a veto, and no score change. A `null` or absent type gets no marker and no guess; this costs no fetch because `/scrape` already stored the value.
 
 ### Closing soon
 | Deadline | Title | Company | URL |

@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Keep /scrape's growing history out of the agent context.
+
+Pass a JSON array of search hits to `candidates` before fetching details, then
+pass the enriched entries to `store`. Both commands deduplicate against the
+current history and tracker; `store` writes the history atomically.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from job_key import make_key
+from rank_state import STATE, TRACKER, _force_utf8_output, load_state, norm, save_state, tracker_pairs
+
+
+def read_jobs(path: Path) -> list:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+    if isinstance(data, dict):
+        data = data.get("results")
+    if not isinstance(data, list):
+        raise ValueError("results must be a JSON array of jobs")
+    return data
+
+
+def identity(job: dict) -> tuple[str, tuple[str, str]]:
+    for field in ("title", "url"):
+        if not isinstance(job.get(field), str) or not job[field].strip():
+            raise ValueError(f"job needs a non-empty {field}")
+    # The portal contract (add-portal.md) says a missing value is null, never
+    # omitted, and freehire, linkedin and jobindex all emit `company: null`
+    # for a posting whose employer the board does not name. That is a real
+    # posting, not a portal data error: identity is the URL plus the
+    # (company, title) pair with an empty company half, and job_key's own
+    # fallback ("unknown-company") keys it on store.
+    company = job.get("company")
+    if company is not None and not isinstance(company, str):
+        raise ValueError("job has a non-string company")
+    url = job["url"].strip()
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"job has an invalid posting URL: {url}")
+    return url.rstrip("/"), (norm(company), norm(job["title"]))
+
+
+def select(jobs: list, seen: dict, tracker: set, *, strict: bool = False) -> tuple[list[dict], dict]:
+    urls, pairs = set(), set()
+    for entry in seen.values():
+        if not isinstance(entry, dict):
+            raise ValueError("job_scraper/seen_jobs.json contains a non-object entry")
+        if isinstance(entry.get("url"), str):
+            urls.add(entry["url"].rstrip("/"))
+        pairs.add((norm(entry.get("company")), norm(entry.get("title"))))
+
+    # The third identity is the key `store` will write under. The pair check
+    # keeps accents (`norm` is NFC + casefold) while `make_key` folds them to
+    # ASCII, so "Développeur Python" and "Developpeur Python" at one company
+    # are two pairs but one key. Deduplicating on the key here means `store`
+    # can never meet a collision it did not select around - which used to
+    # raise mid-loop and lose the whole batch, the unrelated jobs included.
+    selected = []
+    counts = {"already_seen": 0, "already_applied": 0, "repeated_in_batch": 0, "invalid": []}
+    batch_urls, batch_pairs, batch_keys = set(), set(), set()
+    for index, job in enumerate(jobs):
+        try:
+            if not isinstance(job, dict):
+                raise ValueError("job is not an object")
+            url, pair = identity(job)
+        except ValueError as exc:
+            if strict:
+                raise ValueError(f"job {index + 1}: {exc}") from exc
+            counts["invalid"].append({"index": index, "error": str(exc)})
+            continue
+        key = make_key(job["company"], job["title"], job["url"])
+        if url in urls or pair in pairs or key in seen:
+            counts["already_seen"] += 1
+        elif pair in tracker:
+            counts["already_applied"] += 1
+        elif url in batch_urls or pair in batch_pairs or key in batch_keys:
+            counts["repeated_in_batch"] += 1
+        else:
+            selected.append(job)
+            batch_urls.add(url)
+            batch_pairs.add(pair)
+            batch_keys.add(key)
+    return selected, counts
+
+
+def run(args) -> int:
+    if args.state.exists():
+        doc, seen = load_state(args.state)
+    else:
+        doc = {"seen": {}}
+        seen = doc["seen"]
+    if args.command == "history":
+        domain = (args.domain or "").lower().strip(".")
+        if not args.portal or not domain:
+            raise ValueError("history needs --portal and --domain")
+        count = 0
+        for entry in seen.values():
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("portal") == args.portal:
+                count += 1
+            elif not entry.get("portal"):
+                url = entry.get("url")
+                try:
+                    host = (urlsplit(url if isinstance(url, str) else "").hostname or "").lower()
+                except ValueError:
+                    continue
+                if host == domain or host.endswith("." + domain):
+                    count += 1
+        print(json.dumps({"portal": args.portal, "prior_entries": count}))
+        return 0
+
+    jobs = read_jobs(args.results)
+    selected, counts = select(jobs, seen, tracker_pairs(args.tracker), strict=args.command == "store")
+    if args.command == "candidates":
+        print(json.dumps({"selected": selected, **counts}, ensure_ascii=False))
+        return 0
+
+    added = []
+    for job in selected:
+        for field in ("first_seen", "posted_date", "deadline", "fit", "status", "portal", "source"):
+            if field not in job:
+                raise ValueError(f"job needs {field} before storage")
+        if job["fit"] not in ("high", "medium", "low") or job["status"] not in ("new", "skipped", "expired"):
+            raise ValueError("job has an invalid fit or status")
+        if job["source"] not in ("cli", "websearch") or not isinstance(job["portal"], str):
+            raise ValueError("job has an invalid portal or source")
+        key = make_key(job["company"], job["title"], job["url"])
+        if key in seen:
+            # select() deduplicates on the key too, so this is a job the
+            # caller added after calling candidates; keep it out rather than
+            # abandon the batch.
+            counts["already_seen"] += 1
+            continue
+        seen[key] = job
+        added.append(key)
+    if added:
+        args.state.parent.mkdir(parents=True, exist_ok=True)
+        save_state(args.state, doc)
+    print(json.dumps({"added": added, **counts}, ensure_ascii=False))
+    return 0
+
+
+def main() -> int:
+    _force_utf8_output()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("command", choices=("candidates", "store", "history"))
+    parser.add_argument("--results", type=Path)
+    parser.add_argument("--portal")
+    parser.add_argument("--domain")
+    args = parser.parse_args()
+    args.state, args.tracker = STATE, TRACKER
+    try:
+        if args.command != "history" and args.results is None:
+            parser.error("candidates and store need --results")
+        return run(args)
+    except ValueError as exc:
+        print(f"scrape_state: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

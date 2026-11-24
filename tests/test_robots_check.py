@@ -73,6 +73,47 @@ class TestPathRules(unittest.TestCase):
         self.assertFalse(allowed(body, "*", "/tag/$var"))
         self.assertFalse(allowed(body, "*", "/tag/$var/sub"))
 
+    def test_repeated_wildcards_do_not_catastrophically_backtrack(self):
+        # GHSA-xhqf-8q8x-4jwm: every '*' became a regex '.*', so a rule with
+        # repeated wildcard segments that does not match took exponential time
+        # in Python's backtracking engine (16 segments: minutes). The matcher
+        # must run in O(len(pattern) * len(path)) whatever the rule says.
+        import time
+
+        pat = "/" + "*a" * 13 + "*b$"
+        body = f"User-agent: *\nDisallow: {pat}\n"
+        path = "/" + "a" * 28 + "X"
+        start = time.perf_counter()
+        res = allowed(body, "*", path)
+        elapsed = time.perf_counter() - start
+        self.assertTrue(res)
+        self.assertLess(elapsed, 0.5, f"_match took {elapsed:.2f}s (catastrophic backtracking)")
+
+    def test_consecutive_wildcards_match_identically_to_single_wildcard(self):
+        body = "User-agent: *\nDisallow: /docs/*******.pdf$\n"
+        self.assertFalse(allowed(body, "*", "/docs/cv.pdf"))
+        self.assertFalse(allowed(body, "*", "/docs/sub/folder/cv.pdf"))
+        self.assertTrue(allowed(body, "*", "/docs/sub/folder/cv.html"))
+
+    def test_wildcard_semantics_survive_the_matcher_change(self):
+        # Pinned against the regex matcher's answers: prefix match without '$',
+        # full match with it, a wildcard spanning slashes and the empty string,
+        # and a trailing wildcard before the anchor.
+        body = (
+            "User-agent: *\n"
+            "Disallow: /a*b\n"
+            "Disallow: /x/*/y$\n"
+            "Disallow: /end*$\n"
+        )
+        self.assertFalse(allowed(body, "*", "/ab"))
+        self.assertFalse(allowed(body, "*", "/a/long/path/b/and-more"))
+        self.assertTrue(allowed(body, "*", "/a"))
+        self.assertFalse(allowed(body, "*", "/x/anything/at/all/y"))
+        self.assertTrue(allowed(body, "*", "/x/anything/y/more"))
+        self.assertFalse(allowed(body, "*", "/end"))
+        self.assertFalse(allowed(body, "*", "/ending/here"))
+        self.assertTrue(allowed(body, "*", "/en"))
+
     def test_percent_encoded_query_string_matches_rule_in_gate(self):
         import robots_check
 
@@ -209,6 +250,64 @@ class TestSoftTwoHundred(unittest.TestCase):
 
     def test_sitemap_only_file_counts(self):
         self.assertTrue(is_robots_body("Sitemap: https://x.example/sitemap.xml\n"))
+
+    # Rails' default public/robots.txt, served verbatim by job-boards.greenhouse.io
+    # and job-boards.eu.greenhouse.io (checked 2026-11-21). Every line is a
+    # comment, so it has no rules: allow-all under RFC 9309, the same as an
+    # empty file. It used to read as "not a robots.txt" and fetch_page refused.
+    RAILS_DEFAULT = (
+        "# See http://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file\n"
+        "#\n"
+        "# To ban all spiders from the entire site uncomment the next two lines:\n"
+        "# User-agent: *\n"
+        "# Disallow: /\n"
+    )
+
+    def test_a_comment_only_robots_is_allow_all(self):
+        self.assertTrue(is_robots_body(self.RAILS_DEFAULT))
+        self.assertTrue(is_robots_body("\ufeff" + self.RAILS_DEFAULT))
+        self.assertTrue(allowed(self.RAILS_DEFAULT, "Claude-User", "/gitlab/jobs/8704363002"))
+
+    def test_gate_allows_a_comment_only_robots(self):
+        import robots_check
+
+        original = robots_check._fetch
+        robots_check._fetch = lambda url, ua: (self.RAILS_DEFAULT, 200)
+        try:
+            rc, msg = robots_check.gate("https://job-boards.greenhouse.io/gitlab/jobs/8704363002")
+        finally:
+            robots_check._fetch = original
+        self.assertEqual(rc, 0, msg)
+        self.assertIn("ALLOWED", msg)
+
+    def test_a_comment_line_does_not_make_an_error_page_a_robots_file(self):
+        """Only a body that is ALL comments counts; one leading comment line in
+        front of an HTML page is still a soft 200."""
+        self.assertFalse(is_robots_body("# cached\n<html><body>404 Not Found</body></html>\n"))
+        self.assertFalse(is_robots_body("#!/bin/sh\necho not a robots file\n"))
+
+    def test_comment_only_with_other_line_endings_and_indent_is_allow_all(self):
+        """CRLF, CR-only and indented comments are the same comment-only file."""
+        for body in (
+            self.RAILS_DEFAULT.replace("\n", "\r\n"),
+            self.RAILS_DEFAULT.replace("\n", "\r"),
+            "   # indented comment\n\t# tab-indented comment\n",
+        ):
+            with self.subTest(body=body[:30]):
+                self.assertTrue(is_robots_body(body))
+
+    def test_a_hash_only_error_page_reads_as_allow_all_on_purpose(self):
+        """Accepted trade-off, pinned so nobody mistakes it for a bug: a plain-text
+        error body made only of '#' lines cannot be told from a one-comment
+        robots.txt, RFC 9309 parses both as no rules, and such a host has
+        published no policy (the same as a 404). See is_robots_body()."""
+        self.assertTrue(is_robots_body("# 404 Not Found\n"))
+
+    def test_a_comment_only_body_cannot_hide_a_rule(self):
+        """A rule after a comment line is still a rule."""
+        body = "# generated\nUser-agent: *\nDisallow: /\n"
+        self.assertTrue(is_robots_body(body))
+        self.assertFalse(allowed(body, "Claude-User", "/jobs/1"))
 
 
 class TestPercentEncodedRules(unittest.TestCase):
@@ -462,3 +561,78 @@ class TestNonAsciiCurlOutput(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSchemeHardening(unittest.TestCase):
+    """GHSA-h8vc-753p-wpmh: only http(s) reaches curl, on the first hop and on
+    every redirect.
+
+    gate() rebuilt the target as scheme://host/robots.txt but never checked the
+    scheme, so a direct call with file:, gopher: or ftp: handed that scheme to
+    curl, and curl -L was free to follow a redirect to any protocol it supports.
+    """
+
+    def _gate_without_curl(self, url):
+        # Record rather than fail inside the spy: gate() swallows every
+        # exception from _fetch into an UNCONFIRMED verdict, which would pass.
+        import robots_check
+
+        fetched = []
+        original = robots_check._fetch
+        robots_check._fetch = lambda url, ua: fetched.append(url) or ("", 404)
+        try:
+            result = robots_check.gate(url)
+        finally:
+            robots_check._fetch = original
+        self.assertEqual(fetched, [], f"curl was asked for {fetched}")
+        return result
+
+    def test_non_http_scheme_is_unconfirmed_without_a_fetch(self):
+        for url in ("file:///etc/passwd", "gopher://127.0.0.1:6379/_", "ftp://x.example/robots.txt", "x.example/path"):
+            with self.subTest(url=url):
+                rc, msg = self._gate_without_curl(url)
+                self.assertEqual(rc, 1)
+                self.assertTrue(msg.startswith("UNCONFIRMED"), msg)
+                self.assertIn("scheme", msg)
+
+    def test_missing_host_is_unconfirmed_without_a_fetch(self):
+        rc, msg = self._gate_without_curl("http:///robots.txt")
+        self.assertEqual(rc, 1)
+        self.assertTrue(msg.startswith("UNCONFIRMED"), msg)
+
+    def test_curl_is_pinned_to_http_and_https_on_every_hop(self):
+        import robots_check
+
+        seen = []
+
+        class Done:
+            returncode, stdout, stderr = 0, "\n404", ""
+
+        def fake_run(argv, **kwargs):
+            seen.append(argv)
+            return Done()
+
+        original = robots_check.subprocess.run
+        robots_check.subprocess.run = fake_run
+        try:
+            body, code = robots_check._fetch("https://x.example/robots.txt", "Claude-User")
+        finally:
+            robots_check.subprocess.run = original
+        self.assertEqual(code, 404)
+        argv = seen[0]
+        self.assertIn("--proto", argv)
+        self.assertEqual(argv[argv.index("--proto") + 1], "=http,https")
+        self.assertIn("--proto-redir", argv)
+        self.assertEqual(argv[argv.index("--proto-redir") + 1], "=http,https")
+        self.assertLess(argv.index("--proto-redir"), argv.index("--"))
+
+    def test_real_curl_refuses_a_file_url_through_fetch(self):
+        import shutil
+
+        import robots_check
+
+        if not shutil.which("curl"):
+            self.skipTest("curl is not installed")
+        target = (REPO_ROOT / "tools" / "robots_check.py").resolve().as_uri()
+        with self.assertRaises(RuntimeError):
+            robots_check._fetch(target, "Claude-User")

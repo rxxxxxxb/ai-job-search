@@ -16,9 +16,15 @@ Rules implemented (RFC 9309), deliberately on the cautious side:
   * one leading UTF-8 byte-order mark is skipped (left in, it hides a first
     "User-agent" line and drops that whole group, which fails open)
   * 404 means no published policy, which is permission
+  * a 200 whose body is not a robots.txt (an HTML or JSON error page) is
+    unreadable, not permission; an empty body, or one of nothing but
+    comments (Rails' default robots.txt), is a valid allow-all
   * any other failure to read robots.txt leaves permission unconfirmed,
     and the retry does not happen - including a User-agent, Allow or
     Disallow line holding U+FFFD, i.e. a byte that is not valid UTF-8
+  * only an http or https URL with a host is checked at all; anything else
+    is unconfirmed without a request, and curl itself is pinned to http(s)
+    on the first hop and on every redirect
 
 Usage:  python3 tools/robots_check.py <url>
 Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 3.
@@ -37,8 +43,12 @@ def _fetch(url, ua):
     # be read by curl as a flag. gate() rebuilds the target as
     # scheme://host/robots.txt before calling here, so this is hardening for
     # direct callers rather than a hole in the gate path itself.
+    # --proto pins the first hop to http(s) and --proto-redir every redirect
+    # -L follows, so neither the caller nor the site can steer curl to file:,
+    # gopher:, ftp: or any other protocol it was built with (GHSA-h8vc-753p-wpmh).
     r = subprocess.run(
-        ['curl', '-sS', '-L', '--max-redirs', '5', '--max-time', '12', '-A', ua,
+        ['curl', '-sS', '-L', '--proto', '=http,https', '--proto-redir', '=http,https',
+         '--max-redirs', '5', '--max-time', '12', '-A', ua,
          '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code}', '--', url],
         # robots.txt is UTF-8 (RFC 9309). Unpinned, Turkish Windows decoded it as
         # cp1254, where bytes like 0x81 are undefined: the pipe reader thread died,
@@ -56,14 +66,24 @@ def is_robots_body(text):
     A misconfigured host can answer /robots.txt with 200 and an HTML error page.
     That body parses to zero rules, and zero rules read as "allowed" - so a
     soft-200 granted permission that was never given. An empty or whitespace-only
-    body IS a valid allow-all under RFC 9309 and stays allowed; a non-empty body
-    with no recognised directive is treated as unreadable.
+    body IS a valid allow-all under RFC 9309 and stays allowed, and so does a body
+    of nothing but comments (Rails' default robots.txt, served by
+    job-boards.greenhouse.io): comments carry no rules, so it is the same file.
+    Any other non-empty body with no recognised directive is treated as unreadable.
+
+    Accepted on purpose: a plain-text error page made only of '#' lines
+    ("# 404 Not Found") reads as allow-all too. RFC 9309 parses it that way,
+    no body shape can tell it from a one-comment robots.txt, and a host that
+    answers like that has published no policy - the same as a 404, which is
+    permission. The soft 200 that can hide a real policy (a firewall or login
+    page) is HTML, and stays unreadable.
     """
     text = text.removeprefix('\ufeff')          # byte-order mark, see _groups
-    if not text.strip():
-        return True
-    for raw in text.splitlines():
-        line = raw.split('#', 1)[0].strip().lower()
+    lines = [raw.split('#', 1)[0].strip() for raw in text.splitlines()]
+    if not any(lines):
+        return True                             # empty, or nothing but comments
+    for line in lines:
+        line = line.lower()
         if ':' in line and line.split(':', 1)[0].strip() in (
             'user-agent', 'allow', 'disallow', 'sitemap', 'crawl-delay', 'host',
         ):
@@ -124,14 +144,39 @@ def _match(pattern, path):
     silently skipped - a fail-open on any site that encodes its own rules.
     Under RFC 9309 section 2.2.2, '$' anchors the end of the URL only when
     at the end of the pattern; mid-pattern '$' is matched literally.
+
+    Matching is a table walk in O(len(pattern) * len(path)), never a regex.
+    Each '*' used to become '.*', and a non-matching rule with repeated
+    wildcard segments ("/*a*a*a...*b$") sent Python's backtracking engine into
+    exponential time - minutes at 16 segments - on a file the site controls
+    (GHSA-xhqf-8q8x-4jwm). Consecutive '*' match as one, as RFC 9309 implies.
     """
     if pattern == '':
         return -1
     pattern = unquote(pattern)
     end_anchor = pattern.endswith('$')
-    pat = pattern[:-1] if end_anchor else pattern
-    rx = '^' + ''.join('.*' if c == '*' else re.escape(c) for c in pat) + ('$' if end_anchor else '')
-    return len(pattern) if re.match(rx, path) else -1
+    pat = re.sub(r'\*{2,}', '*', pattern[:-1] if end_anchor else pattern)
+    # reach[j] is True when the first j pattern characters match the path
+    # consumed so far. A '*' extends a match over any character (reach[j]
+    # carries forward) and also matches nothing (reach[j-1] on the same row).
+    reach = [True] + [False] * len(pat)
+    for j, c in enumerate(pat, 1):
+        if c != '*':
+            break
+        reach[j] = True
+    if reach[-1] and not end_anchor:
+        return len(pattern)
+    for ch in path:
+        step = [False] * (len(pat) + 1)
+        for j, c in enumerate(pat, 1):
+            if c == '*':
+                step[j] = step[j - 1] or reach[j]
+            elif c == ch:
+                step[j] = reach[j - 1]
+        reach = step
+        if reach[-1] and not end_anchor:
+            return len(pattern)      # a prefix match is enough without '$'
+    return len(pattern) if reach[-1] else -1
 
 def allowed(text, agent, path):
     g = _groups(text)
@@ -144,7 +189,13 @@ def allowed(text, agent, path):
     return True if best_len < 0 else best_allow
 
 def gate(url):
-    parts = urlsplit(url)
+    parts = urlsplit(url)  # urlsplit lower-cases the scheme
+    # Only http(s) with a host is a page this tool can have a policy for; any
+    # other input fails closed before curl is asked anything.
+    if parts.scheme not in ('http', 'https'):
+        return 1, f'UNCONFIRMED (unsupported URL scheme {parts.scheme!r}) - do not retry, go to step 3'
+    if not parts.netloc:
+        return 1, 'UNCONFIRMED (no host in the URL) - do not retry, go to step 3'
     path = unquote(parts.path) or '/'
     if parts.query:
         path += '?' + unquote(parts.query)
@@ -173,7 +224,21 @@ def gate(url):
             return 1, f'DISALLOWED for {a} - do not retry, go to step 3'
     return 0, 'ALLOWED - robots.txt permits this path'
 
+def _force_utf8_output() -> None:
+    """Write UTF-8 whatever the host's default encoding is.
+
+    A piped stdout on Windows defaults to the ANSI code page (cp1252 on most
+    Western installs), so printing messages or paths outside it raised
+    UnicodeEncodeError before the workflow saw any output.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)  # absent on a StringIO under test
+        if reconfigure:
+            reconfigure(encoding="utf-8")
+
+
 if __name__ == '__main__':
+    _force_utf8_output()
     if len(sys.argv) != 2:
         print('usage: python3 tools/robots_check.py <url>', file=sys.stderr)
         sys.exit(2)
