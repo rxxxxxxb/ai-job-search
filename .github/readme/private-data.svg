@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 372" width="1280" height="372" role="img" aria-labelledby="t d">
+  <title id="t">Personal data stays out of git</title>
+  <desc id="d">On your machine, the personal files (profile, CVs and letters, applications, tracker, search queries, company research) are listed in the fork's .gitignore and are never committed. Only the framework, its tests and the Arbeitsagentur search reach the public fork on GitHub.</desc>
+  <style>
+    .s{font-family:ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif}
+    .m{font-family:ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace}
+    .flow{animation:flow 1.6s linear infinite}
+    .cdoc{animation:cdoc 8s ease-in-out infinite}
+    .mdoc{animation:mdoc 8s ease-in-out infinite}
+    .bar{animation:bar 8s linear infinite}
+    .ring{transform-box:fill-box;transform-origin:center;opacity:0;animation:ring 8s ease-out infinite}
+    @keyframes flow{to{stroke-dashoffset:-24}}
+    @keyframes cdoc{0%{transform:translateX(-34px);opacity:0}6%{opacity:1}26%{transform:translateX(0)}29%{transform:translateX(-6px)}32%{transform:translateX(0)}35%{transform:translateX(-4px)}38%{transform:translateX(0);opacity:1}46%,100%{transform:translateX(0);opacity:0}}
+    @keyframes bar{0%,25%{stroke:#9FE0CF;stroke-opacity:.35}28%,40%{stroke:#F4704F;stroke-opacity:1}46%,100%{stroke:#9FE0CF;stroke-opacity:.35}}
+    @keyframes mdoc{0%,48%{transform:translateX(-98px);opacity:0}53%{opacity:1}84%{transform:translateX(52px);opacity:1}90%,100%{transform:translateX(52px);opacity:0}}
+    @keyframes ring{0%,82%{transform:scale(.8);opacity:0}84%{opacity:.9}96%,100%{transform:scale(2.1);opacity:0}}
+    @media (prefers-reduced-motion: reduce){*{animation:none!important}}
+  </style>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F2229"/><stop offset="1" stop-color="#15333C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.1" r="0.6">
+      <stop offset="0" stop-color="#2A9D8F" stop-opacity=".28"/><stop offset="1" stop-color="#2A9D8F" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="card"><rect width="1280" height="372" rx="28"/></clipPath>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1280" height="372" fill="url(#bg)"/>
+    <rect width="1280" height="372" fill="url(#glow)"/>
+
+    <!-- your machine -->
+    <rect x="48" y="40" width="512" height="292" rx="20" fill="#0A1A20" fill-opacity=".55" stroke="#9FE0CF" stroke-opacity=".16" stroke-width="2"/>
+    <text class="s" x="80" y="84" font-size="22" font-weight="700" fill="#EEF3EF">Your machine</text>
+
+    <circle cx="88" cy="118" r="5" fill="#F4704F"/>
+    <text class="s" x="102" y="124" font-size="16" fill="#F4704F">Personal, never committed</text>
+    <g class="s" font-size="17" fill="#EEF3EF" text-anchor="middle">
+      <rect x="80" y="138" width="95" height="34" rx="17" fill="#1D3F49" stroke="#F4704F" stroke-opacity=".5" stroke-width="1.5"/><text x="127.5" y="161">Profile</text>
+      <rect x="185" y="138" width="149" height="34" rx="17" fill="#1D3F49" stroke="#F4704F" stroke-opacity=".5" stroke-width="1.5"/><text x="259.5" y="161">CVs + letters</text>
+      <rect x="344" y="138" width="140" height="34" rx="17" fill="#1D3F49" stroke="#F4704F" stroke-opacity=".5" stroke-width="1.5"/><text x="414" y="161">Applications</text>
+      <rect x="80" y="182" width="95" height="34" rx="17" fill="#1D3F49" stroke="#F4704F" stroke-opacity=".5" stroke-width="1.5"/><text x="127.5" y="205">Tracker</text>
+      <rect x="185" y="182" width="158" height="34" rx="17" fill="#1D3F49" stroke="#F4704F" stroke-opacity=".5" stroke-width="1.5"/><text x="264" y="205">Search queries</text>
+      <rect x="353" y="182" width="176" height="34" rx="17" fill="#1D3F49" stroke="#F4704F" stroke-opacity=".5" stroke-width="1.5"/><text x="441" y="205">Company research</text>
+    </g>
+
+    <circle cx="88" cy="250" r="5" fill="#9FE0CF"/>
+    <text class="s" x="102" y="256" font-size="16" fill="#9FE0CF">Framework, tracked and public</text>
+    <g class="s" font-size="17" fill="#EEF3EF" text-anchor="middle">
+      <rect x="80" y="270" width="113" height="34" rx="17" fill="#2A9D8F" fill-opacity=".18" stroke="#9FE0CF" stroke-opacity=".5" stroke-width="1.5"/><text x="136.5" y="293">Framework</text>
+      <rect x="203" y="270" width="77" height="34" rx="17" fill="#2A9D8F" fill-opacity=".18" stroke="#9FE0CF" stroke-opacity=".5" stroke-width="1.5"/><text x="241.5" y="293">Tests</text>
+      <rect x="290" y="270" width="221" height="34" rx="17" fill="#2A9D8F" fill-opacity=".18" stroke="#9FE0CF" stroke-opacity=".5" stroke-width="1.5"/><text x="400.5" y="293">Arbeitsagentur search</text>
+    </g>
+
+    <!-- the gate: the fork's .gitignore rules -->
+    <text class="m" x="640" y="96" text-anchor="middle" font-size="20" font-weight="700" fill="#F4704F">.gitignore</text>
+    <text class="s" x="640" y="118" text-anchor="middle" font-size="14" fill="#EEF3EF" fill-opacity=".6">FORK-LOCAL block</text>
+    <path d="M564 177 H622" stroke="#F4704F" stroke-opacity=".7" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <path d="M564 287 H714" stroke="#9FE0CF" stroke-opacity=".45" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <rect class="bar" x="632" y="136" width="16" height="84" rx="8" fill="#1D3F49" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+
+    <!-- GitHub -->
+    <rect x="720" y="40" width="512" height="292" rx="20" fill="#0A1A20" fill-opacity=".55" stroke="#9FE0CF" stroke-opacity=".16" stroke-width="2"/>
+    <text class="s" x="752" y="84" font-size="22" font-weight="700" fill="#EEF3EF">GitHub, public fork</text>
+
+    <circle cx="772" cy="172" r="15" fill="none" stroke="#F4704F" stroke-width="2.5"/>
+    <path d="M761.4 182.6 L782.6 161.4" stroke="#F4704F" stroke-width="2.5" stroke-linecap="round"/>
+    <text class="s" x="802" y="179" font-size="20" fill="#EEF3EF">No personal data</text>
+    <text class="s" x="802" y="203" font-size="16" fill="#EEF3EF" fill-opacity=".6">names, CVs and applications stay local</text>
+
+    <circle class="ring" cx="772" cy="287" r="16" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+    <circle cx="772" cy="287" r="16" fill="#2A9D8F"/>
+    <path d="M764 287 l6 6 l11 -12" fill="none" stroke="#EEF3EF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="s" x="802" y="294" font-size="20" fill="#EEF3EF">Framework and tests</text>
+    <text class="s" x="802" y="318" font-size="16" fill="#EEF3EF" fill-opacity=".6">plus the Arbeitsagentur search</text>
+
+    <!-- documents on their way: drawn last so they sit on top of both panels -->
+    <g class="cdoc">
+      <rect x="598" y="164" width="20" height="26" rx="3" fill="#EEF3EF"/>
+      <rect x="602" y="169" width="9" height="3" rx="1.5" fill="#F4704F"/>
+      <rect x="602" y="175" width="12" height="2.5" rx="1.25" fill="#A9BCB5"/>
+      <rect x="602" y="180" width="12" height="2.5" rx="1.25" fill="#A9BCB5"/>
+      <rect x="602" y="185" width="8" height="2.5" rx="1.25" fill="#A9BCB5"/>
+    </g>
+    <g class="mdoc">
+      <rect x="664" y="274" width="20" height="26" rx="3" fill="#EEF3EF"/>
+      <rect x="668" y="279" width="9" height="3" rx="1.5" fill="#2A9D8F"/>
+      <rect x="668" y="285" width="12" height="2.5" rx="1.25" fill="#A9BCB5"/>
+      <rect x="668" y="290" width="12" height="2.5" rx="1.25" fill="#A9BCB5"/>
+      <rect x="668" y="295" width="8" height="2.5" rx="1.25" fill="#A9BCB5"/>
+    </g>
+  </g>
+  <rect x=".5" y=".5" width="1279" height="371" rx="27.5" fill="none" stroke="#9FE0CF" stroke-opacity=".14"/>
+</svg>

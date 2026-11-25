@@ -1,12 +1,46 @@
-# AI Job Search: German job market fork
+<p align="center">
+  <img src="../assets/readme/hero.svg" alt="AI Job Search. Pip the courier bird carries an application along a flight path to its destination. The job search that runs on your machine." width="100%">
+</p>
 
-[![CI](https://github.com/rxxxxxxb/ai-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/rxxxxxxb/ai-job-search/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/rxxxxxxb/ai-job-search/actions/workflows/ci.yml"><img src="https://github.com/rxxxxxxb/ai-job-search/actions/workflows/ci.yml/badge.svg" alt="CI" height="20"></a>
+  &nbsp;
+  <a href="https://github.com/ai-job-search-dev/ai-job-search/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/upstream-v2.1.0-2A9D8F?style=flat" alt="Based on upstream release v2.1.0" height="20"></a>
+  &nbsp;
+  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built_on-Claude_Code-2A9D8F?style=flat" alt="Built on Claude Code" height="20"></a>
+  &nbsp;
+  <a href="/LICENSE"><img src="https://img.shields.io/badge/license-MIT-2A9D8F?style=flat" alt="MIT license" height="20"></a>
+</p>
 
-This is a fork of [ai-job-search-dev/ai-job-search](https://github.com/ai-job-search-dev/ai-job-search) (formerly MadsLorentzen/ai-job-search), a Claude Code framework that evaluates job postings, tailors LaTeX CVs and cover letters, and prepares for interviews. The fork adds a search tool for Germany's federal job board and keeps all personal data out of the public repository.
+<h3 align="center">German job market fork</h3>
 
-The framework, its commands and the full setup guide are the upstream project's work. They are documented in the [upstream README](/README.md), which this fork keeps unchanged. This page covers what the fork adds.
+<p align="center">
+  A fork of <a href="https://github.com/ai-job-search-dev/ai-job-search">ai-job-search-dev/ai-job-search</a>, the Claude Code framework that<br>
+  evaluates job postings, tailors LaTeX CVs and cover letters, and prepares you for interviews.<br>
+  This fork adds a search tool for Germany's federal job board<br>
+  and keeps all personal data out of the public repository.
+</p>
 
-## Search the Bundesagentur für Arbeit job board
+<p align="center">
+  <a href="#search-germanys-federal-job-board"><b>Job board search</b></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="#personal-data-stays-out-of-git"><b>Personal data</b></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="#build-a-cv-or-cover-letter-with-one-command"><b>One-command builds</b></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="#setting-up"><b>Setting up</b></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="/README.md"><b>Upstream README</b></a>
+</p>
+
+> [!NOTE]
+> The framework, its commands and the full setup guide are the upstream project's work. They are documented in the [upstream README](/README.md), which this fork keeps unchanged. This page covers what the fork adds. The fork is independent and is not affiliated with the upstream maintainers or with Anthropic.
+
+## Search Germany's federal job board
+
+<p align="center">
+  <img src="readme/arbeitsagentur.svg" alt="/scrape sends plain search terms to arbeitsagentur-search, which queries the Jobbörse of the Bundesagentur für Arbeit through its REST API v6. Each result is marked UNBEFRISTET (permanent) or BEFRISTET (fixed-term) when the posting says so." width="100%">
+</p>
 
 `arbeitsagentur-search` queries the Jobbörse of the Bundesagentur für Arbeit (Federal Employment Agency) through its public REST API. `/scrape` picks it up automatically, like any portal tool under `.agents/skills/`.
 
@@ -24,6 +58,10 @@ bun run .agents/skills/arbeitsagentur-search/cli/src/cli.ts search \
 Flags and output format: [SKILL.md](/.agents/skills/arbeitsagentur-search/SKILL.md). API notes, including the field changes from v4 to v6 and the query-syntax measurements: [url-reference.md](/.agents/skills/arbeitsagentur-search/url-reference.md).
 
 ## Personal data stays out of git
+
+<p align="center">
+  <img src="readme/private-data.svg" alt="On your machine, the personal files (profile, CVs and letters, applications, tracker, search queries, company research) are listed in the fork's .gitignore and never committed. Only the framework, its tests and the Arbeitsagentur search reach the public fork on GitHub." width="100%">
+</p>
 
 A fork of a public repository is public, and `/setup` writes names, contact details, work history and self-assessment notes into the profile files. In this fork those files stay on disk but outside git:
 
@@ -52,4 +90,9 @@ Follow the [upstream quick start](/README.md#quick-start). Three things differ:
 
 ## Credits and license
 
-The framework is by [Mads Lorentzen](https://github.com/MadsLorentzen) and its contributors, now maintained in the [ai-job-search-dev](https://github.com/ai-job-search-dev) organization and released under the [MIT License](/LICENSE); see the [upstream acknowledgements](/README.md#acknowledgements). This fork's changes are released under the same license. Built with [Claude Code](https://claude.com/claude-code); not affiliated with Anthropic.
+The framework is by [Mads Lorentzen](https://github.com/MadsLorentzen) and its contributors, now maintained in the [ai-job-search-dev](https://github.com/ai-job-search-dev) organization and released under the [MIT License](/LICENSE); see the [upstream acknowledgements](/README.md#acknowledgements). The header artwork and Pip come from the upstream project; the two diagrams on this page are the fork's own, drawn in the same style. This fork's changes are released under the same license. Built with [Claude Code](https://claude.com/claude-code).
+
+<p align="center">
+  <img src="../assets/mascot/pip_flight_loop.gif" alt="Pip, the courier bird" width="120"><br>
+  <sub>Pip delivers. Viel Erfolg!</sub>
+</p>

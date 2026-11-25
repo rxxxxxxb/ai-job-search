@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-labelledby="t d">
+  <title id="t">Search Germany's federal job board</title>
+  <desc id="d">/scrape sends plain search terms to arbeitsagentur-search, which queries the Jobbörse of the Bundesagentur für Arbeit through its REST API v6. Each result is marked UNBEFRISTET (permanent) or BEFRISTET (fixed-term) when the posting says so.</desc>
+  <style>
+    .s{font-family:ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif}
+    .m{font-family:ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace}
+    .flow{animation:flow 1.6s linear infinite}
+    .pulse{transform-box:fill-box;transform-origin:center;opacity:0;animation:pulse 3.2s ease-out infinite}
+    .p2{animation-delay:1.6s}
+    .cover{animation:type 10s steps(43,end) infinite}
+    .cmd{animation:cmd 10s linear infinite}
+    .r1{animation:r1 10s ease-out infinite}
+    .r2{animation:r2 10s ease-out infinite}
+    .r3{animation:r3 10s ease-out infinite}
+    @keyframes flow{to{stroke-dashoffset:-24}}
+    @keyframes pulse{0%{transform:scale(.8);opacity:.8}70%,100%{transform:scale(2.1);opacity:0}}
+    @keyframes type{0%,4%{transform:translateX(-480px)}24%,100%{transform:translateX(0)}}
+    @keyframes cmd{0%,90%{opacity:1}95%,100%{opacity:0}}
+    @keyframes r1{0%,27%{opacity:0;transform:translateY(8px)}31%,88%{opacity:1;transform:translateY(0)}93%,100%{opacity:0;transform:translateY(0)}}
+    @keyframes r2{0%,34%{opacity:0;transform:translateY(8px)}38%,88%{opacity:1;transform:translateY(0)}93%,100%{opacity:0;transform:translateY(0)}}
+    @keyframes r3{0%,41%{opacity:0;transform:translateY(8px)}45%,88%{opacity:1;transform:translateY(0)}93%,100%{opacity:0;transform:translateY(0)}}
+    @media (prefers-reduced-motion: reduce){*{animation:none!important}}
+  </style>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F2229"/><stop offset="1" stop-color="#15333C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.1" r="0.6">
+      <stop offset="0" stop-color="#2A9D8F" stop-opacity=".28"/><stop offset="1" stop-color="#2A9D8F" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="card"><rect width="1280" height="360" rx="28"/></clipPath>
+    <clipPath id="term"><rect x="332" y="54" width="616" height="252" rx="16"/></clipPath>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1280" height="360" fill="url(#bg)"/>
+    <rect width="1280" height="360" fill="url(#glow)"/>
+
+    <!-- search terms travel right, postings travel back left -->
+    <path d="M176 171 H326" stroke="#9FE0CF" stroke-opacity=".45" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <path d="M326 189 H176" stroke="#F4704F" stroke-opacity=".75" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <path d="M954 171 H1104" stroke="#9FE0CF" stroke-opacity=".45" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <path d="M1104 189 H954" stroke="#F4704F" stroke-opacity=".75" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+
+    <!-- /scrape -->
+    <circle class="pulse" cx="150" cy="180" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+    <circle cx="150" cy="180" r="20" fill="#2A9D8F"/>
+    <circle cx="150" cy="180" r="6" fill="#EEF3EF"/>
+    <text class="m" x="150" y="246" text-anchor="middle" font-size="22" font-weight="700" fill="#9FE0CF">/scrape</text>
+    <text class="s" x="150" y="274" text-anchor="middle" font-size="17" fill="#EEF3EF" fill-opacity=".72">plain search terms</text>
+
+    <!-- Jobbörse -->
+    <circle class="pulse p2" cx="1130" cy="180" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+    <circle cx="1130" cy="180" r="20" fill="#2A9D8F"/>
+    <circle cx="1130" cy="180" r="6" fill="#EEF3EF"/>
+    <text class="s" x="1130" y="246" text-anchor="middle" font-size="20" font-weight="600" fill="#EEF3EF">Jobbörse</text>
+    <text class="s" x="1130" y="274" text-anchor="middle" font-size="17" fill="#EEF3EF" fill-opacity=".72">Bundesagentur für Arbeit</text>
+    <text class="m" x="1130" y="300" text-anchor="middle" font-size="15" fill="#9FE0CF" fill-opacity=".8">REST API v6</text>
+
+    <!-- the CLI this fork adds -->
+    <rect x="330" y="52" width="620" height="256" rx="18" fill="#0A1A20" stroke="#9FE0CF" stroke-opacity=".22" stroke-width="2"/>
+    <circle cx="356" cy="77" r="5.5" fill="#F4704F"/>
+    <circle cx="376" cy="77" r="5.5" fill="#9FE0CF" fill-opacity=".55"/>
+    <circle cx="396" cy="77" r="5.5" fill="#2A9D8F"/>
+    <text class="m" x="640" y="82" text-anchor="middle" font-size="15" fill="#EEF3EF" fill-opacity=".55">arbeitsagentur-search</text>
+    <line x1="330" y1="98" x2="950" y2="98" stroke="#9FE0CF" stroke-opacity=".14" stroke-width="1.5"/>
+
+    <g class="cmd">
+      <text class="m" x="356" y="138" font-size="18" font-weight="700" fill="#F4704F">›</text>
+      <text class="m" x="378" y="138" font-size="18" fill="#EEF3EF">search -q "Machine Learning" -l Deutschland</text>
+    </g>
+    <g clip-path="url(#term)"><rect class="cover" x="858" y="118" width="500" height="30" fill="#0A1A20"/></g>
+
+    <g class="r1">
+      <circle cx="362" cy="179" r="4" fill="#9FE0CF"/>
+      <text class="m" x="378" y="184" font-size="16" fill="#EEF3EF">Machine Learning Engineer (m/w/d)</text>
+      <rect x="378" y="194" width="190" height="6" rx="3" fill="#A9BCB5" fill-opacity=".45"/>
+      <rect x="814" y="172" width="112" height="26" rx="13" fill="#2A9D8F" fill-opacity=".25" stroke="#9FE0CF" stroke-opacity=".7" stroke-width="1.5"/>
+      <text class="m" x="870" y="190" text-anchor="middle" font-size="13" font-weight="700" fill="#9FE0CF">UNBEFRISTET</text>
+    </g>
+    <g class="r2">
+      <circle cx="362" cy="223" r="4" fill="#9FE0CF"/>
+      <text class="m" x="378" y="228" font-size="16" fill="#EEF3EF">Data Scientist (m/w/d)</text>
+      <rect x="378" y="238" width="150" height="6" rx="3" fill="#A9BCB5" fill-opacity=".45"/>
+      <rect x="814" y="216" width="112" height="26" rx="13" fill="#F4704F" fill-opacity=".14" stroke="#F4704F" stroke-opacity=".8" stroke-width="1.5"/>
+      <text class="m" x="870" y="234" text-anchor="middle" font-size="13" font-weight="700" fill="#F4704F">BEFRISTET</text>
+    </g>
+    <g class="r3">
+      <circle cx="362" cy="267" r="4" fill="#9FE0CF"/>
+      <text class="m" x="378" y="272" font-size="16" fill="#EEF3EF">Computer Vision Engineer (m/w/d)</text>
+      <rect x="378" y="282" width="220" height="6" rx="3" fill="#A9BCB5" fill-opacity=".45"/>
+      <rect x="814" y="260" width="112" height="26" rx="13" fill="none" stroke="#A9BCB5" stroke-opacity=".5" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <text class="s" x="870" y="278" text-anchor="middle" font-size="13" fill="#A9BCB5">not stated</text>
+    </g>
+
+    <text class="s" x="640" y="338" text-anchor="middle" font-size="15" fill="#EEF3EF" fill-opacity=".6">UNBEFRISTET = permanent  ·  BEFRISTET = fixed-term</text>
+  </g>
+  <rect x=".5" y=".5" width="1279" height="359" rx="27.5" fill="none" stroke="#9FE0CF" stroke-opacity=".14"/>
+</svg>
